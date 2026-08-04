@@ -2,7 +2,18 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { crosscheckDecisionPoint } from "@/lib/crosscheck";
+import { crosscheckDecisionPoint, parseMessageLines } from "@/lib/crosscheck";
+
+const STATUS_COLORS = {
+  Draft: "bg-black/5 text-ink/60 border-black/10",
+  "Location Approved": "bg-blue-50 text-blue-700 border-blue-200",
+  "Sign type approved": "bg-blue-50 text-blue-700 border-blue-200",
+  "Content Approved": "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "Artwork approved": "bg-purple-50 text-purple-700 border-purple-200",
+  "In Production": "bg-amber-50 text-amber-700 border-amber-200",
+  Produced: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Installed: "bg-emerald-100 text-emerald-800 border-emerald-300",
+};
 
 export default function SchedulePage({ params }) {
   const { planId } = params;
@@ -13,34 +24,44 @@ export default function SchedulePage({ params }) {
   const run = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: planData }, { data: points }, { data: pois }, { data: signTypes }] = await Promise.all([
+    const [{ data: planData }, { data: points }, { data: signTypes }] = await Promise.all([
       supabase.from("plans").select("*").eq("id", planId).single(),
       supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
-      supabase.from("pois").select("*").eq("plan_id", planId),
       supabase.from("sign_types").select("*"),
     ]);
     setPlan(planData);
 
-    const poiIds = (pois || []).map((p) => p.id);
-    let messagesByPoi = {};
-    if (poiIds.length > 0) {
-      const { data: messages } = await supabase.from("messages").select("*").in("poi_id", poiIds);
-      messagesByPoi = (messages || []).reduce((acc, m) => {
-        (acc[m.poi_id] = acc[m.poi_id] || []).push(m);
-        return acc;
-      }, {});
-    }
+    const signTypesById = Object.fromEntries((signTypes || []).map((st) => [st.id, st]));
 
-    const results = (points || []).map((point) => {
-      const linkedPois = (pois || []).filter((p) => p.decision_point_id === point.id);
-      const allMessages = linkedPois.flatMap((p) => messagesByPoi[p.id] || []);
-      const result = crosscheckDecisionPoint(allMessages, signTypes || []);
+    const results = (points || []).map((point, index) => {
+      const messageLines = parseMessageLines(point.messages);
+
+      let signTypeName;
+      let assignmentBadge;
+
+      if (point.sign_type_id && signTypesById[point.sign_type_id]) {
+        signTypeName = signTypesById[point.sign_type_id].name;
+        assignmentBadge = { label: "Selected", color: "emerald" };
+      } else {
+        const result = crosscheckDecisionPoint(messageLines, point.needs_pictogram, signTypes || []);
+        if (result.status === "auto") {
+          signTypeName = `${result.signType.name} (suggested)`;
+          assignmentBadge = { label: "Suggested", color: "amber" };
+        } else {
+          signTypeName = "—";
+          assignmentBadge = { label: "Conflict", color: "red", reason: result.reason };
+        }
+      }
 
       return {
         decisionPoint: point,
-        locations: linkedPois.map((p) => p.name),
-        messages: allMessages,
-        result,
+        signCode: point.sign_code || `Sign ${index + 1}`,
+        location: point.location || "",
+        functionalArea: point.functional_area || "",
+        messageLines,
+        signTypeName,
+        assignmentBadge,
+        status: point.status || "Draft",
       };
     });
 
@@ -53,14 +74,14 @@ export default function SchedulePage({ params }) {
   }, [run]);
 
   function exportCsv() {
-    const header = ["Decision point", "Locations", "Messages", "Sign type", "Status", "Notes"];
+    const header = ["Sign code", "Location", "Functional Area", "Messages", "Sign Type", "Approval Status"];
     const lines = rows.map((r) => [
-      r.decisionPoint.label || r.decisionPoint.id.slice(0, 8),
-      r.locations.join(" / "),
-      r.messages.map((m) => m.text).join(" | "),
-      r.result.signType?.name || "",
-      r.result.status,
-      r.result.reason || "",
+      r.signCode,
+      r.location,
+      r.functionalArea,
+      r.messageLines.join("; "),
+      r.signTypeName,
+      r.status,
     ]);
     const csv = [header, ...lines]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -74,7 +95,7 @@ export default function SchedulePage({ params }) {
     URL.revokeObjectURL(url);
   }
 
-  const conflictCount = rows.filter((r) => r.result.status === "conflict").length;
+  const conflictCount = rows.filter((r) => r.assignmentBadge.color === "red").length;
 
   return (
     <div>
@@ -94,14 +115,14 @@ export default function SchedulePage({ params }) {
         </div>
       </div>
       <p className="text-ink/60 mb-6">
-        Auto-generated from your route, locations, messages, and KOP. Review conflicts before finalizing scope.
+        Sign type shown is your manual selection where set, otherwise a suggestion from the KOP crosscheck.
       </p>
 
-      {loading && <p className="text-ink/50">Running crosscheck...</p>}
+      {loading && <p className="text-ink/50">Loading...</p>}
 
       {!loading && rows.length === 0 && (
         <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
-          No decision points on this plan yet. Add routes and locations in the editor first.
+          No signs on this plan yet. Add decision points in the editor first.
         </div>
       )}
 
@@ -109,49 +130,43 @@ export default function SchedulePage({ params }) {
         <>
           {conflictCount > 0 && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-3 text-sm mb-4">
-              {conflictCount} decision point{conflictCount === 1 ? "" : "s"} couldn&apos;t be auto-assigned a sign type.
-              Review the rows marked &quot;conflict&quot; below.
+              {conflictCount} sign{conflictCount === 1 ? "" : "s"} have no sign type selected and no auto-suggestion
+              fits. Review the rows marked &quot;Conflict&quot; below.
             </div>
           )}
 
-          <div className="bg-white border border-black/10 rounded-lg overflow-hidden">
+          <div className="bg-white border border-black/10 rounded-lg overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-black/5 text-ink/60 text-left">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Decision point</th>
-                  <th className="px-4 py-2 font-medium">Locations</th>
+                  <th className="px-4 py-2 font-medium">Sign code</th>
+                  <th className="px-4 py-2 font-medium">Location</th>
+                  <th className="px-4 py-2 font-medium">Functional Area</th>
                   <th className="px-4 py-2 font-medium">Messages</th>
                   <th className="px-4 py-2 font-medium">Sign type</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Approval status</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.decisionPoint.id} className="border-t border-black/10 align-top">
-                    <td className="px-4 py-3 text-ink/80">
-                      {r.decisionPoint.label || `Point ${r.decisionPoint.sequence_order + 1}`}
-                    </td>
-                    <td className="px-4 py-3 text-ink/70">{r.locations.join(", ") || "—"}</td>
+                    <td className="px-4 py-3 text-ink/80 font-medium whitespace-nowrap">{r.signCode}</td>
+                    <td className="px-4 py-3 text-ink/70">{r.location || "—"}</td>
+                    <td className="px-4 py-3 text-ink/70">{r.functionalArea || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">
-                      {r.messages.length === 0
-                        ? "—"
-                        : r.messages.map((m) => m.text).join(", ")}
+                      {r.messageLines.length === 0 ? "—" : r.messageLines.join("; ")}
                     </td>
-                    <td className="px-4 py-3 text-ink/80">{r.result.signType?.name || "—"}</td>
+                    <td className="px-4 py-3 text-ink/80 whitespace-nowrap">
+                      <span title={r.assignmentBadge.reason}>{r.signTypeName}</span>
+                    </td>
                     <td className="px-4 py-3">
-                      {r.result.status === "auto" && (
-                        <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 text-xs">
-                          Assigned
-                        </span>
-                      )}
-                      {r.result.status === "conflict" && (
-                        <span
-                          className="inline-block bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5 text-xs"
-                          title={r.result.reason}
-                        >
-                          Conflict
-                        </span>
-                      )}
+                      <span
+                        className={`inline-block border rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+                          STATUS_COLORS[r.status] || STATUS_COLORS.Draft
+                        }`}
+                      >
+                        {r.status}
+                      </span>
                     </td>
                   </tr>
                 ))}

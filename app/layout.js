@@ -16,7 +16,7 @@ export default function RootLayout({ children }) {
                 Wayfinding Scoping Tool
               </a>
               <nav className="flex gap-6 text-sm text-ink/70">
-                <a href="/" className="hover:text-ink">Plans</a>
+                <a href="/" className="hover:text-ink">Projects</a>
                 <a href="/kop" className="hover:text-ink">Sign types (KOP)</a>
               </nav>
             </div>

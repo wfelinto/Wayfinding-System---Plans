@@ -54,20 +54,25 @@ export default function PlanCanvas({
       </svg>
 
       {decisionPoints.map((p) => (
-        <button
-          key={p.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectDecisionPoint(p.id);
-          }}
-          style={{ left: `${p.x}%`, top: `${p.y}%` }}
-          className={`absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 ${
-            selectedType === "decision_point" && selectedId === p.id
-              ? "bg-amber-400 border-amber-600"
-              : "bg-white border-accent"
-          }`}
-          title={p.label || "Decision point"}
-        />
+        <div key={p.id} style={{ left: `${p.x}%`, top: `${p.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectDecisionPoint(p.id);
+            }}
+            className={`w-4 h-4 rounded-full border-2 ${
+              selectedType === "decision_point" && selectedId === p.id
+                ? "bg-amber-400 border-amber-600"
+                : "bg-white border-accent"
+            }`}
+            title={p.sign_code || p.label || "Decision point"}
+          />
+          {p.sign_code && (
+            <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
+              {p.sign_code}
+            </span>
+          )}
+        </div>
       ))}
 
       {pois.map((poi) => (
