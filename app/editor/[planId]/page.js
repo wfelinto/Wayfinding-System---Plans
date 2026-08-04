@@ -40,6 +40,8 @@ export default function EditorPage({ params }) {
     message_slots: normalizeMessageSlots([]),
   });
   const [dpSaving, setDpSaving] = useState(false);
+  const [dpSaveError, setDpSaveError] = useState(null);
+  const [dpSaved, setDpSaved] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(null); // 'plan' | 'report' | null
   const [pdfError, setPdfError] = useState(null);
@@ -66,6 +68,11 @@ export default function EditorPage({ params }) {
     loadPlan();
     loadGeometry();
   }, [loadPlan, loadGeometry]);
+
+  useEffect(() => {
+    setDpSaveError(null);
+    setDpSaved(false);
+  }, [selectedId]);
 
   useEffect(() => {
     if (selectedId) {
@@ -121,7 +128,9 @@ export default function EditorPage({ params }) {
     e.preventDefault();
     if (!selectedId) return;
     setDpSaving(true);
-    await supabase
+    setDpSaveError(null);
+    setDpSaved(false);
+    const { error } = await supabase
       .from("decision_points")
       .update({
         sign_code: dpForm.sign_code || null,
@@ -135,6 +144,11 @@ export default function EditorPage({ params }) {
       })
       .eq("id", selectedId);
     setDpSaving(false);
+    if (error) {
+      setDpSaveError(error.message);
+      return;
+    }
+    setDpSaved(true);
     loadGeometry();
   }
 
@@ -423,6 +437,17 @@ export default function EditorPage({ params }) {
                 />
                 {imageUploading && <p className="text-xs text-ink/40 mt-1">Uploading...</p>}
               </div>
+
+              {dpSaveError && (
+                <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-2 text-xs">
+                  Save failed: {dpSaveError}
+                </p>
+              )}
+              {dpSaved && !dpSaveError && (
+                <p className="text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-2 text-xs">
+                  Saved.
+                </p>
+              )}
 
               <button
                 type="submit"
