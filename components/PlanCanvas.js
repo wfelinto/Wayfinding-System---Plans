@@ -29,6 +29,7 @@ export default function PlanCanvas({
   const containerRef = useRef(null);
   const ignoreNextClick = useRef(false);
   const [zoom, setZoom] = useState(100);
+  const [highContrast, setHighContrast] = useState(false);
 
   function pctFromEvent(e) {
     const rect = containerRef.current.getBoundingClientRect();
@@ -120,6 +121,17 @@ export default function PlanCanvas({
         >
           +
         </button>
+        <span className="w-px h-5 bg-black/10 mx-0.5" />
+        <button
+          type="button"
+          onClick={() => setHighContrast((v) => !v)}
+          className={`px-2 h-6 flex items-center justify-center text-xs font-medium rounded ${
+            highContrast ? "bg-accent text-white" : "text-ink/70 hover:text-ink hover:bg-black/5"
+          }`}
+          title="Gray out the plan to make sign dots stand out"
+        >
+          Contrast
+        </button>
       </div>
 
       <div className="overflow-auto" style={{ maxHeight: "75vh" }}>
@@ -133,7 +145,8 @@ export default function PlanCanvas({
           <img
             src={imageUrl}
             alt="Floor plan"
-            className="w-full h-auto block pointer-events-none"
+            className="w-full h-auto block pointer-events-none transition-[filter] duration-150"
+            style={highContrast ? { filter: "grayscale(1) brightness(1.5) contrast(0.85)" } : undefined}
             draggable={false}
           />
 
