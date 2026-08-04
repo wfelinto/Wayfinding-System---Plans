@@ -46,13 +46,23 @@ export default function PlanCanvas({
     ignoreNextClick.current = true;
     e.preventDefault();
 
+    const DRAG_THRESHOLD_PX = 4;
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
     let moved = false;
     let lastPos = { x: point.x, y: point.y };
     const pinEl = document.getElementById(`dp-pin-${point.id}`);
 
     function handlePointerMove(moveEvent) {
-      const { x, y } = pctFromEvent(moveEvent);
+      const dx = moveEvent.clientX - startClientX;
+      const dy = moveEvent.clientY - startClientY;
+      if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) {
+        // Still within the click "dead zone" — ignore jitter so a plain
+        // click never gets misread as a drag that nudges the pin.
+        return;
+      }
       moved = true;
+      const { x, y } = pctFromEvent(moveEvent);
       lastPos = { x, y };
       if (pinEl) {
         pinEl.style.left = `${x}%`;
