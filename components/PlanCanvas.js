@@ -41,22 +41,16 @@ export default function PlanCanvas({
     onCanvasClick(x, y);
   }
 
-  function handlePinMouseDown(e, point) {
+  function handlePinPointerDown(e, point) {
+    e.stopPropagation();
     ignoreNextClick.current = true;
-
-    if (addMode) {
-      // While placing new signs, dots are only selectable, not draggable
-      // — avoids accidentally dropping a new pin where one is being moved.
-      onSelectDecisionPoint(point.id);
-      return;
-    }
-
     e.preventDefault();
+
     let moved = false;
     let lastPos = { x: point.x, y: point.y };
     const pinEl = document.getElementById(`dp-pin-${point.id}`);
 
-    function handleMouseMove(moveEvent) {
+    function handlePointerMove(moveEvent) {
       const { x, y } = pctFromEvent(moveEvent);
       moved = true;
       lastPos = { x, y };
@@ -66,9 +60,9 @@ export default function PlanCanvas({
       }
     }
 
-    function handleMouseUp() {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
       if (moved) {
         onMoveDecisionPoint(point.id, lastPos.x, lastPos.y);
       } else {
@@ -76,8 +70,8 @@ export default function PlanCanvas({
       }
     }
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
   }
 
   return (
@@ -96,11 +90,11 @@ export default function PlanCanvas({
           key={p.id}
           id={`dp-pin-${p.id}`}
           style={{ left: `${p.x}%`, top: `${p.y}%` }}
-          className={`absolute -translate-x-1/2 -translate-y-1/2 ${addMode ? "" : "cursor-move"}`}
+          className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
         >
           <button
-            onMouseDown={(e) => handlePinMouseDown(e, p)}
-            className={`w-4 h-4 rounded-full border-2 ${
+            onPointerDown={(e) => handlePinPointerDown(e, p)}
+            className={`w-4 h-4 rounded-full border-2 touch-none ${
               selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
             }`}
             title={p.sign_code || "Sign"}
