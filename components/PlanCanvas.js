@@ -85,37 +85,37 @@ export default function PlanCanvas({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onClick={handleContainerClick}
-      className={`relative w-full border border-black/10 rounded-lg overflow-hidden bg-white select-none ${
-        addMode ? "cursor-crosshair" : ""
-      }`}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageUrl} alt="Floor plan" className="w-full h-auto block pointer-events-none" draggable={false} />
+    <div className="w-full border border-black/10 rounded-lg overflow-hidden bg-white">
+      <div
+        ref={containerRef}
+        onClick={handleContainerClick}
+        className={`relative select-none ${addMode ? "cursor-crosshair" : ""}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="Floor plan" className="w-full h-auto block pointer-events-none" draggable={false} />
 
-      {decisionPoints.map((p) => (
-        <div
-          key={p.id}
-          id={`dp-pin-${p.id}`}
-          style={{ left: `${p.x}%`, top: `${p.y}%` }}
-          className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
-        >
-          <button
-            onPointerDown={(e) => handlePinPointerDown(e, p)}
-            className={`w-4 h-4 rounded-full border-2 touch-none ${
-              selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
-            }`}
-            title={p.sign_code || "Sign"}
-          />
-          {p.sign_code && (
-            <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
-              {p.sign_code}
-            </span>
-          )}
-        </div>
-      ))}
+        {decisionPoints.map((p) => (
+          <div
+            key={p.id}
+            id={`dp-pin-${p.id}`}
+            style={{ left: `${p.x}%`, top: `${p.y}%` }}
+            className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
+          >
+            <button
+              onPointerDown={(e) => handlePinPointerDown(e, p)}
+              className={`w-4 h-4 rounded-full border-2 touch-none ${
+                selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
+              }`}
+              title={p.sign_code || "Sign"}
+            />
+            {p.sign_code && (
+              <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
+                {p.sign_code}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

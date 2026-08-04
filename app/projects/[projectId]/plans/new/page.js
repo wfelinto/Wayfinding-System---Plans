@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { renderPdfFirstPageToBlob } from "@/lib/pdfToImage";
+import { normalizeImageToPngBlob } from "@/lib/normalizeImage";
 
 export default function NewPlanPage({ params }) {
   const { projectId } = params;
@@ -32,6 +33,16 @@ export default function NewPlanPage({ params }) {
       if (file.type === "application/pdf" || fileExt === "pdf") {
         setStatusMsg("Converting PDF to an image...");
         uploadBlob = await renderPdfFirstPageToBlob(file, 2.5);
+        fileExt = "png";
+        contentType = "image/png";
+      } else {
+        // Redraw JPG/PNG uploads onto a canvas too, so any EXIF rotation
+        // (common in phone photos and some scans) gets baked into the
+        // pixels once here — otherwise the browser's on-screen rotation
+        // and a canvas export's raw pixel reading can disagree, making
+        // sign positions look shifted between the editor and PDF exports.
+        setStatusMsg("Preparing image...");
+        uploadBlob = await normalizeImageToPngBlob(file);
         fileExt = "png";
         contentType = "image/png";
       }
