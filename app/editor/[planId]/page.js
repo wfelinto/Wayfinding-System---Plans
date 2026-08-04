@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlanCanvas from "@/components/PlanCanvas";
 import { downloadPlanPdf, downloadSignReportPdf } from "@/lib/pdfExport";
+import { normalizeMessageSlots } from "@/lib/crosscheck";
+import { ARROW_OPTIONS } from "@/lib/arrows";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -22,27 +24,20 @@ export default function EditorPage({ params }) {
   const [plan, setPlan] = useState(null);
   const [imageUrl, setImageUrl] = useState(null);
   const [decisionPoints, setDecisionPoints] = useState([]);
-  const [routeSegments, setRouteSegments] = useState([]);
-  const [pois, setPois] = useState([]);
   const [signTypes, setSignTypes] = useState([]);
 
-  const [mode, setMode] = useState("route"); // 'route' | 'poi' | 'select'
-  const [lastPlacedId, setLastPlacedId] = useState(null);
-  const [selectedType, setSelectedType] = useState(null); // 'decision_point' | 'poi'
+  const [addMode, setAddMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
-  const [pendingPoi, setPendingPoi] = useState(null); // {x, y}
-  const [poiForm, setPoiForm] = useState({ name: "" });
-
-  // Full sign content for the selected decision point (the "dot").
   const [dpForm, setDpForm] = useState({
     sign_code: "",
     location: "",
     functional_area: "",
-    messages: "",
+    comments: "",
     needs_pictogram: false,
     status: "Draft",
     sign_type_id: "",
+    message_slots: normalizeMessageSlots([]),
   });
   const [dpSaving, setDpSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -59,15 +54,11 @@ export default function EditorPage({ params }) {
   }, [planId]);
 
   const loadGeometry = useCallback(async () => {
-    const [dp, rs, po, st] = await Promise.all([
+    const [dp, st] = await Promise.all([
       supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
-      supabase.from("route_segments").select("*").eq("plan_id", planId),
-      supabase.from("pois").select("*").eq("plan_id", planId),
       supabase.from("sign_types").select("*").order("name"),
     ]);
     setDecisionPoints(dp.data || []);
-    setRouteSegments(rs.data || []);
-    setPois(po.data || []);
     setSignTypes(st.data || []);
   }, [planId]);
 
@@ -77,83 +68,58 @@ export default function EditorPage({ params }) {
   }, [loadPlan, loadGeometry]);
 
   useEffect(() => {
-    if (selectedType === "decision_point" && selectedId) {
+    if (selectedId) {
       const dp = decisionPoints.find((p) => p.id === selectedId);
-      setDpForm({
-        sign_code: dp?.sign_code || "",
-        location: dp?.location || "",
-        functional_area: dp?.functional_area || "",
-        messages: dp?.messages || "",
-        needs_pictogram: dp?.needs_pictogram || false,
-        status: dp?.status || "Draft",
-        sign_type_id: dp?.sign_type_id || "",
-      });
-    }
-  }, [selectedType, selectedId, decisionPoints]);
-
-  async function handleCanvasClick(xPct, yPct) {
-    if (mode === "route") {
-      const nextSignCode = `Sign ${decisionPoints.length + 1}`;
-      const { data: inserted, error } = await supabase
-        .from("decision_points")
-        .insert({
-          plan_id: planId,
-          x: xPct,
-          y: yPct,
-          sequence_order: decisionPoints.length,
-          sign_code: nextSignCode,
-        })
-        .select()
-        .single();
-      if (error) return;
-
-      if (lastPlacedId) {
-        await supabase.from("route_segments").insert({
-          plan_id: planId,
-          from_point: lastPlacedId,
-          to_point: inserted.id,
+      if (dp) {
+        setDpForm({
+          sign_code: dp.sign_code || "",
+          location: dp.location || "",
+          functional_area: dp.functional_area || "",
+          comments: dp.comments || "",
+          needs_pictogram: dp.needs_pictogram || false,
+          status: dp.status || "Draft",
+          sign_type_id: dp.sign_type_id || "",
+          message_slots: normalizeMessageSlots(dp.message_slots),
         });
       }
-      setLastPlacedId(inserted.id);
-      loadGeometry();
-    } else if (mode === "poi") {
-      setPendingPoi({ x: xPct, y: yPct });
-      setPoiForm({ name: "" });
     }
-  }
+  }, [selectedId, decisionPoints]);
 
-  function nearestDecisionPoint(x, y) {
-    if (decisionPoints.length === 0) return null;
-    let best = decisionPoints[0];
-    let bestDist = Infinity;
-    for (const p of decisionPoints) {
-      const d = Math.hypot(p.x - x, p.y - y);
-      if (d < bestDist) {
-        bestDist = d;
-        best = p;
-      }
-    }
-    return best;
-  }
-
-  async function savePoi(e) {
-    e.preventDefault();
-    if (!pendingPoi || !poiForm.name) return;
-    const nearest = nearestDecisionPoint(pendingPoi.x, pendingPoi.y);
-    await supabase.from("pois").insert({
-      plan_id: planId,
-      decision_point_id: nearest ? nearest.id : null,
-      name: poiForm.name,
-      x: pendingPoi.x,
-      y: pendingPoi.y,
-    });
-    setPendingPoi(null);
+  async function handleCanvasClick(xPct, yPct) {
+    const nextSignCode = `Sign ${decisionPoints.length + 1}`;
+    const { data: inserted, error } = await supabase
+      .from("decision_points")
+      .insert({
+        plan_id: planId,
+        x: xPct,
+        y: yPct,
+        sequence_order: decisionPoints.length,
+        sign_code: nextSignCode,
+      })
+      .select()
+      .single();
+    if (error) return;
+    setSelectedId(inserted.id);
     loadGeometry();
+  }
+
+  async function handleMoveDecisionPoint(id, xPct, yPct) {
+    await supabase.from("decision_points").update({ x: xPct, y: yPct }).eq("id", id);
+    loadGeometry();
+  }
+
+  function updateMessageSlot(index, field, value) {
+    setDpForm((prev) => {
+      const slots = prev.message_slots.map((slot, i) =>
+        i === index ? { ...slot, [field]: value } : slot
+      );
+      return { ...prev, message_slots: slots };
+    });
   }
 
   async function saveDecisionPointDetails(e) {
     e.preventDefault();
-    if (selectedType !== "decision_point" || !selectedId) return;
+    if (!selectedId) return;
     setDpSaving(true);
     await supabase
       .from("decision_points")
@@ -161,10 +127,11 @@ export default function EditorPage({ params }) {
         sign_code: dpForm.sign_code || null,
         location: dpForm.location || null,
         functional_area: dpForm.functional_area || null,
-        messages: dpForm.messages || null,
+        comments: dpForm.comments || null,
         needs_pictogram: dpForm.needs_pictogram,
         status: dpForm.status,
         sign_type_id: dpForm.sign_type_id || null,
+        message_slots: dpForm.message_slots,
       })
       .eq("id", selectedId);
     setDpSaving(false);
@@ -173,7 +140,7 @@ export default function EditorPage({ params }) {
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
-    if (!file || selectedType !== "decision_point" || !selectedId) return;
+    if (!file || !selectedId) return;
     setImageUploading(true);
     try {
       const fileExt = file.name.split(".").pop();
@@ -189,19 +156,22 @@ export default function EditorPage({ params }) {
     }
   }
 
+  async function deleteThisSign() {
+    if (!selectedId) return;
+    const confirmed = window.confirm("Delete this sign? This can't be undone.");
+    if (!confirmed) return;
+    await supabase.from("decision_points").delete().eq("id", selectedId);
+    setSelectedId(null);
+    loadGeometry();
+  }
+
   async function clearAll() {
     const confirmed = window.confirm(
-      "This will permanently delete every route, decision point, location, and message on this plan. This can't be undone. Continue?"
+      "This will permanently delete every sign on this plan. This can't be undone. Continue?"
     );
     if (!confirmed) return;
-
-    await supabase.from("pois").delete().eq("plan_id", planId);
     await supabase.from("decision_points").delete().eq("plan_id", planId);
-
-    setLastPlacedId(null);
-    setSelectedType(null);
     setSelectedId(null);
-    setPendingPoi(null);
     loadGeometry();
   }
 
@@ -209,7 +179,7 @@ export default function EditorPage({ params }) {
     setPdfError(null);
     setPdfBusy("plan");
     try {
-      await downloadPlanPdf(plan, imageUrl, decisionPoints, routeSegments);
+      await downloadPlanPdf(plan, imageUrl, decisionPoints);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -222,7 +192,7 @@ export default function EditorPage({ params }) {
     setPdfBusy("report");
     try {
       const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
-      await downloadSignReportPdf(plan, imageUrl, decisionPoints, routeSegments, signTypesById);
+      await downloadSignReportPdf(plan, imageUrl, decisionPoints, signTypesById);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -230,13 +200,10 @@ export default function EditorPage({ params }) {
     }
   }
 
-  const selectedPoi = selectedType === "poi" ? pois.find((p) => p.id === selectedId) : null;
-  const selectedPoint = selectedType === "decision_point" ? decisionPoints.find((p) => p.id === selectedId) : null;
-
-  const selectedPointImageUrl =
-    selectedPoint?.image_path
-      ? supabase.storage.from("dot-images").getPublicUrl(selectedPoint.image_path).data.publicUrl
-      : null;
+  const selectedPoint = decisionPoints.find((p) => p.id === selectedId) || null;
+  const selectedPointImageUrl = selectedPoint?.image_path
+    ? supabase.storage.from("dot-images").getPublicUrl(selectedPoint.image_path).data.publicUrl
+    : null;
 
   if (!plan || !imageUrl) return <p className="text-ink/50">Loading plan...</p>;
 
@@ -254,31 +221,12 @@ export default function EditorPage({ params }) {
         </div>
         <div className="flex flex-wrap gap-2 items-start">
           <button
-            onClick={() => {
-              setMode("route");
-              setLastPlacedId(null);
-            }}
+            onClick={() => setAddMode((v) => !v)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-              mode === "route" ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
+              addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
             }`}
           >
-            Draw route
-          </button>
-          <button
-            onClick={() => setMode("poi")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-              mode === "poi" ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
-            }`}
-          >
-            Add location
-          </button>
-          <button
-            onClick={() => setMode("select")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-              mode === "select" ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
-            }`}
-          >
-            Select
+            Add Sign Location
           </button>
           <button
             onClick={clearAll}
@@ -309,74 +257,46 @@ export default function EditorPage({ params }) {
       )}
 
       <p className="text-sm text-ink/50 mb-3">
-        {mode === "route" && "Click the plan to place decision points in sequence — each new click connects to the last one."}
-        {mode === "poi" && "Click the plan to place a location. It links to the nearest decision point automatically."}
-        {mode === "select" && "Click an existing pin to view or edit its details."}
+        {addMode
+          ? "Click the plan to place a new sign. Click an existing pin to select it instead."
+          : "Drag a pin to move it, or click one to view and edit its details."}
       </p>
 
-      <div className="grid lg:grid-cols-[1fr_360px] gap-6">
+      <div className="grid lg:grid-cols-[1fr_400px] gap-6">
         <PlanCanvas
           imageUrl={imageUrl}
           decisionPoints={decisionPoints}
-          routeSegments={routeSegments}
-          pois={pois}
-          selectedType={selectedType}
           selectedId={selectedId}
+          addMode={addMode}
           onCanvasClick={handleCanvasClick}
-          onSelectDecisionPoint={(id) => {
-            setSelectedType("decision_point");
-            setSelectedId(id);
-          }}
-          onSelectPoi={(id) => {
-            setSelectedType("poi");
-            setSelectedId(id);
-          }}
+          onSelectDecisionPoint={setSelectedId}
+          onMoveDecisionPoint={handleMoveDecisionPoint}
         />
 
         <div className="space-y-4">
-          {pendingPoi && (
-            <form onSubmit={savePoi} className="bg-white border border-black/10 rounded-lg p-4 space-y-3">
-              <h3 className="font-medium text-ink text-sm">New location</h3>
-              <input
-                autoFocus
-                value={poiForm.name}
-                onChange={(e) => setPoiForm({ ...poiForm, name: e.target.value })}
-                placeholder="e.g. Room 204, Reception"
-                className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
-              />
-              <div className="flex gap-2">
-                <button type="submit" className="bg-accent text-white px-3 py-1.5 rounded-md text-sm font-medium">
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingPoi(null)}
-                  className="text-ink/60 text-sm px-3 py-1.5"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-
-          {selectedPoint && (
+          {selectedPoint ? (
             <form
               onSubmit={saveDecisionPointDetails}
               className="bg-white border border-black/10 rounded-lg p-4 space-y-3 max-h-[80vh] overflow-y-auto"
             >
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Sign code</label>
-                <input
-                  value={dpForm.sign_code}
-                  onChange={(e) => setDpForm({ ...dpForm, sign_code: e.target.value })}
-                  placeholder="e.g. Sign 1"
-                  className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm font-medium"
-                />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-ink/70 mb-1">Sign code</label>
+                  <input
+                    value={dpForm.sign_code}
+                    onChange={(e) => setDpForm({ ...dpForm, sign_code: e.target.value })}
+                    placeholder="e.g. Sign 1"
+                    className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm font-medium"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={deleteThisSign}
+                  className="text-xs text-red-600 hover:underline shrink-0 mt-5"
+                >
+                  Delete this sign
+                </button>
               </div>
-
-              <p className="text-xs text-ink/50">
-                {pois.filter((p) => p.decision_point_id === selectedPoint.id).length} location(s) linked here.
-              </p>
 
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Location</label>
@@ -396,19 +316,47 @@ export default function EditorPage({ params }) {
                   placeholder="e.g. Parking, Retail"
                   className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
                 />
-                <p className="text-xs text-ink/40 mt-1">One cell in the export, exactly as typed.</p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Messages</label>
+                <div className="space-y-1.5">
+                  {dpForm.message_slots.map((slot, i) => (
+                    <div key={i} className="flex gap-1.5">
+                      <input
+                        value={slot.text}
+                        onChange={(e) => updateMessageSlot(i, "text", e.target.value)}
+                        placeholder={`Message ${i + 1}`}
+                        className="flex-1 min-w-0 border border-black/15 rounded-md px-2 py-1 text-xs"
+                      />
+                      <select
+                        value={slot.arrow}
+                        onChange={(e) => updateMessageSlot(i, "arrow", e.target.value)}
+                        className="w-24 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
+                      >
+                        {ARROW_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-ink/40 mt-1">
+                  All ten messages together form one Messages cell in the export, each with its arrow.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1">Comments</label>
                 <textarea
-                  value={dpForm.messages}
-                  onChange={(e) => setDpForm({ ...dpForm, messages: e.target.value })}
-                  placeholder={"One message per line, e.g.\nRestrooms →\nGate 12 ↑"}
-                  rows={4}
-                  className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm font-mono"
+                  value={dpForm.comments}
+                  onChange={(e) => setDpForm({ ...dpForm, comments: e.target.value })}
+                  rows={2}
+                  placeholder="Any notes for this sign"
+                  className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
                 />
-                <p className="text-xs text-ink/40 mt-1">Each line is one message; all lines form one Messages cell.</p>
               </div>
 
               <label className="flex items-center gap-2 text-sm text-ink/80">
@@ -484,21 +432,11 @@ export default function EditorPage({ params }) {
                 {dpSaving ? "Saving..." : "Save details"}
               </button>
             </form>
-          )}
-
-          {selectedPoi && (
-            <div className="bg-white border border-black/10 rounded-lg p-4">
-              <h3 className="font-medium text-ink text-sm mb-1">{selectedPoi.name}</h3>
-              <p className="text-xs text-ink/50">
-                Messages and sign details for this location live on its linked decision point — select the
-                connected dot to edit them.
-              </p>
-            </div>
-          )}
-
-          {!pendingPoi && !selectedPoi && !selectedPoint && (
+          ) : (
             <div className="border border-dashed border-black/15 rounded-lg p-6 text-center text-sm text-ink/40">
-              Select a pin, or place a new decision point / location on the plan.
+              {addMode
+                ? "Click the plan to place a new sign."
+                : "Select a pin to view and edit its details, or click \"Add Sign Location\" to place a new one."}
             </div>
           )}
         </div>

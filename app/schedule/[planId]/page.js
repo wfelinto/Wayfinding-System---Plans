@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { crosscheckDecisionPoint, parseMessageLines } from "@/lib/crosscheck";
+import { crosscheckDecisionPoint, nonEmptyMessages, formatMessageLine } from "@/lib/crosscheck";
 
 const STATUS_COLORS = {
   Draft: "bg-black/5 text-ink/60 border-black/10",
@@ -34,7 +34,8 @@ export default function SchedulePage({ params }) {
     const signTypesById = Object.fromEntries((signTypes || []).map((st) => [st.id, st]));
 
     const results = (points || []).map((point, index) => {
-      const messageLines = parseMessageLines(point.messages);
+      const messages = nonEmptyMessages(point.message_slots);
+      const messageLines = messages.map(formatMessageLine);
 
       let signTypeName;
       let assignmentBadge;
@@ -43,7 +44,7 @@ export default function SchedulePage({ params }) {
         signTypeName = signTypesById[point.sign_type_id].name;
         assignmentBadge = { label: "Selected", color: "emerald" };
       } else {
-        const result = crosscheckDecisionPoint(messageLines, point.needs_pictogram, signTypes || []);
+        const result = crosscheckDecisionPoint(messages, point.needs_pictogram, signTypes || []);
         if (result.status === "auto") {
           signTypeName = `${result.signType.name} (suggested)`;
           assignmentBadge = { label: "Suggested", color: "amber" };
@@ -58,6 +59,7 @@ export default function SchedulePage({ params }) {
         signCode: point.sign_code || `Sign ${index + 1}`,
         location: point.location || "",
         functionalArea: point.functional_area || "",
+        comments: point.comments || "",
         messageLines,
         signTypeName,
         assignmentBadge,
@@ -74,12 +76,21 @@ export default function SchedulePage({ params }) {
   }, [run]);
 
   function exportCsv() {
-    const header = ["Sign code", "Location", "Functional Area", "Messages", "Sign Type", "Approval Status"];
+    const header = [
+      "Sign code",
+      "Location",
+      "Functional Area",
+      "Messages",
+      "Comments",
+      "Sign Type",
+      "Approval Status",
+    ];
     const lines = rows.map((r) => [
       r.signCode,
       r.location,
       r.functionalArea,
       r.messageLines.join("; "),
+      r.comments,
       r.signTypeName,
       r.status,
     ]);
@@ -122,7 +133,7 @@ export default function SchedulePage({ params }) {
 
       {!loading && rows.length === 0 && (
         <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
-          No signs on this plan yet. Add decision points in the editor first.
+          No signs on this plan yet. Add signs in the editor first.
         </div>
       )}
 
@@ -143,6 +154,7 @@ export default function SchedulePage({ params }) {
                   <th className="px-4 py-2 font-medium">Location</th>
                   <th className="px-4 py-2 font-medium">Functional Area</th>
                   <th className="px-4 py-2 font-medium">Messages</th>
+                  <th className="px-4 py-2 font-medium">Comments</th>
                   <th className="px-4 py-2 font-medium">Sign type</th>
                   <th className="px-4 py-2 font-medium">Approval status</th>
                 </tr>
@@ -156,6 +168,7 @@ export default function SchedulePage({ params }) {
                     <td className="px-4 py-3 text-ink/70">
                       {r.messageLines.length === 0 ? "—" : r.messageLines.join("; ")}
                     </td>
+                    <td className="px-4 py-3 text-ink/70">{r.comments || "—"}</td>
                     <td className="px-4 py-3 text-ink/80 whitespace-nowrap">
                       <span title={r.assignmentBadge.reason}>{r.signTypeName}</span>
                     </td>
