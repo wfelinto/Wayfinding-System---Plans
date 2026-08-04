@@ -1,13 +1,21 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+
+const ZOOM_MIN = 50;
+const ZOOM_MAX = 300;
+const ZOOM_STEP = 25;
 
 /**
- * Renders the plan image with draggable sign pins.
+ * Renders the plan image with draggable sign pins and zoom controls.
  *
  * - When addMode is on, clicking empty plan area places a new sign.
  * - When addMode is off, dragging a pin moves that sign; a plain click
  *   (no drag) selects it instead.
+ * - Zoom widens the inner content and lets the outer box scroll to it;
+ *   click math is unaffected since it reads the actual on-screen box
+ *   size and position via getBoundingClientRect, which already reflects
+ *   both the current zoom and scroll offset.
  */
 export default function PlanCanvas({
   imageUrl,
@@ -20,6 +28,7 @@ export default function PlanCanvas({
 }) {
   const containerRef = useRef(null);
   const ignoreNextClick = useRef(false);
+  const [zoom, setZoom] = useState(100);
 
   function pctFromEvent(e) {
     const rect = containerRef.current.getBoundingClientRect();
@@ -85,36 +94,71 @@ export default function PlanCanvas({
   }
 
   return (
-    <div className="w-full border border-black/10 rounded-lg overflow-hidden bg-white">
-      <div
-        ref={containerRef}
-        onClick={handleContainerClick}
-        className={`relative select-none ${addMode ? "cursor-crosshair" : ""}`}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt="Floor plan" className="w-full h-auto block pointer-events-none" draggable={false} />
+    <div className="relative w-full border border-black/10 rounded-lg overflow-hidden bg-white">
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-white/95 border border-black/10 rounded-md shadow-sm px-1 py-1">
+        <button
+          type="button"
+          onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+          className="w-6 h-6 flex items-center justify-center text-ink/70 hover:text-ink text-sm font-medium rounded hover:bg-black/5"
+          title="Zoom out"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(100)}
+          className="text-xs text-ink/60 hover:text-ink px-1 min-w-[3rem] text-center"
+          title="Reset zoom"
+        >
+          {zoom}%
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+          className="w-6 h-6 flex items-center justify-center text-ink/70 hover:text-ink text-sm font-medium rounded hover:bg-black/5"
+          title="Zoom in"
+        >
+          +
+        </button>
+      </div>
 
-        {decisionPoints.map((p) => (
-          <div
-            key={p.id}
-            id={`dp-pin-${p.id}`}
-            style={{ left: `${p.x}%`, top: `${p.y}%` }}
-            className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
-          >
-            <button
-              onPointerDown={(e) => handlePinPointerDown(e, p)}
-              className={`w-4 h-4 rounded-full border-2 touch-none ${
-                selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
-              }`}
-              title={p.sign_code || "Sign"}
-            />
-            {p.sign_code && (
-              <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
-                {p.sign_code}
-              </span>
-            )}
-          </div>
-        ))}
+      <div className="overflow-auto" style={{ maxHeight: "75vh" }}>
+        <div
+          ref={containerRef}
+          onClick={handleContainerClick}
+          style={{ width: `${zoom}%` }}
+          className={`relative select-none ${addMode ? "cursor-crosshair" : ""}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt="Floor plan"
+            className="w-full h-auto block pointer-events-none"
+            draggable={false}
+          />
+
+          {decisionPoints.map((p) => (
+            <div
+              key={p.id}
+              id={`dp-pin-${p.id}`}
+              style={{ left: `${p.x}%`, top: `${p.y}%` }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
+            >
+              <button
+                onPointerDown={(e) => handlePinPointerDown(e, p)}
+                className={`w-4 h-4 rounded-full border-2 touch-none ${
+                  selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
+                }`}
+                title={p.sign_code || "Sign"}
+              />
+              {p.sign_code && (
+                <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
+                  {p.sign_code}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
