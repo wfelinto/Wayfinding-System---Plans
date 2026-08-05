@@ -19,7 +19,9 @@ const SIGN_DESIGN_OPTIONS = ["One Side Panel", "Two-Sided Structure", "4-Sided S
 export default function KopPage() {
   const [signTypes, setSignTypes] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -37,10 +39,34 @@ export default function KopPage() {
     setLoading(false);
   }
 
+  function startEdit(st) {
+    setEditingId(st.id);
+    setForm({
+      name: st.name || "",
+      max_messages: st.max_messages ?? 1,
+      max_chars_per_line: st.max_chars_per_line ?? "",
+      supports_pictogram: st.supports_pictogram ?? true,
+      mounting: st.mounting || "wall",
+      unit_cost: st.unit_cost ?? "",
+      sign_design: st.sign_design || "One Side Panel",
+      notes: st.notes || "",
+    });
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError(null);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
-    const { error } = await supabase.from("sign_types").insert({
+    setSaving(true);
+
+    const payload = {
       name: form.name,
       max_messages: Number(form.max_messages),
       max_chars_per_line: form.max_chars_per_line ? Number(form.max_chars_per_line) : null,
@@ -49,16 +75,28 @@ export default function KopPage() {
       unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
       sign_design: form.sign_design,
       notes: form.notes || null,
-    });
+    };
+
+    const { error } = editingId
+      ? await supabase.from("sign_types").update(payload).eq("id", editingId)
+      : await supabase.from("sign_types").insert(payload);
+
+    setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
     setForm(emptyForm);
+    setEditingId(null);
     load();
   }
 
   async function handleDelete(id) {
+    const confirmed = window.confirm(
+      "Delete this sign type? Any signs currently using it will keep their choice but it will no longer appear in dropdowns."
+    );
+    if (!confirmed) return;
+    if (editingId === id) cancelEdit();
     await supabase.from("sign_types").delete().eq("id", id);
     load();
   }
@@ -73,7 +111,14 @@ export default function KopPage() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <form onSubmit={handleSubmit} className="bg-white border border-black/10 rounded-lg p-5 space-y-3 h-fit">
-          <h2 className="font-medium text-ink mb-1">Add a sign type</h2>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-medium text-ink">{editingId ? "Edit sign type" : "Add a sign type"}</h2>
+            {editingId && (
+              <button type="button" onClick={cancelEdit} className="text-xs text-ink/50 hover:text-ink">
+                Cancel
+              </button>
+            )}
+          </div>
 
           <div>
             <label className="block text-xs font-medium text-ink/70 mb-1">Name</label>
@@ -174,9 +219,10 @@ export default function KopPage() {
 
           <button
             type="submit"
-            className="w-full bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+            disabled={saving}
+            className="w-full bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            Add to KOP
+            {saving ? "Saving..." : editingId ? "Save changes" : "Add to KOP"}
           </button>
         </form>
 
@@ -190,7 +236,12 @@ export default function KopPage() {
 
           <div className="space-y-3">
             {signTypes.map((st) => (
-              <div key={st.id} className="bg-white border border-black/10 rounded-lg p-4 flex items-start justify-between">
+              <div
+                key={st.id}
+                className={`bg-white border rounded-lg p-4 flex items-start justify-between ${
+                  editingId === st.id ? "border-accent ring-1 ring-accent/30" : "border-black/10"
+                }`}
+              >
                 <div>
                   <h3 className="font-medium text-ink">{st.name}</h3>
                   <p className="text-sm text-ink/60 mt-1">
@@ -204,12 +255,20 @@ export default function KopPage() {
                   </p>
                   {st.notes && <p className="text-sm text-ink/50 mt-1">{st.notes}</p>}
                 </div>
-                <button
-                  onClick={() => handleDelete(st.id)}
-                  className="text-sm text-red-600 hover:underline shrink-0"
-                >
-                  Remove
-                </button>
+                <div className="flex gap-3 shrink-0">
+                  <button
+                    onClick={() => startEdit(st)}
+                    className="text-sm text-accent hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(st.id)}
+                    className="text-sm text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
