@@ -24,6 +24,7 @@ export default function PlanCanvas({
   selectedId,
   addMode,
   signTypesById,
+  previewRotation,
   onCanvasClick,
   onSelectDecisionPoint,
   onMoveDecisionPoint,
@@ -154,6 +155,7 @@ export default function PlanCanvas({
 
           {decisionPoints.map((p) => {
             const design = signTypesById?.[p.sign_type_id]?.sign_design;
+            const rotation = p.id === selectedId && previewRotation != null ? previewRotation : p.rotation || 0;
             return (
               <div
                 key={p.id}
@@ -166,7 +168,7 @@ export default function PlanCanvas({
                   className={`touch-none flex items-center justify-center rounded-full ${
                     selectedId === p.id ? "ring-2 ring-amber-500 bg-amber-50/70" : ""
                   }`}
-                  style={{ transform: `rotate(${p.rotation || 0}deg)` }}
+                  style={{ transform: `rotate(${rotation}deg)` }}
                   title={p.sign_code || "Sign"}
                 >
                   <SignMarker design={design} />

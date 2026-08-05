@@ -300,6 +300,7 @@ export default function EditorPage({ params }) {
           selectedId={selectedId}
           addMode={addMode}
           signTypesById={Object.fromEntries(signTypes.map((st) => [st.id, st]))}
+          previewRotation={selectedId ? dpForm.rotation : null}
           onCanvasClick={handleCanvasClick}
           onSelectDecisionPoint={setSelectedId}
           onMoveDecisionPoint={handleMoveDecisionPoint}
