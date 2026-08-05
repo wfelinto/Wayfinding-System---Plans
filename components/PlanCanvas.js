@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import SignMarker from "./SignMarker";
 
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 300;
@@ -22,6 +23,7 @@ export default function PlanCanvas({
   decisionPoints,
   selectedId,
   addMode,
+  signTypesById,
   onCanvasClick,
   onSelectDecisionPoint,
   onMoveDecisionPoint,
@@ -150,27 +152,33 @@ export default function PlanCanvas({
             draggable={false}
           />
 
-          {decisionPoints.map((p) => (
-            <div
-              key={p.id}
-              id={`dp-pin-${p.id}`}
-              style={{ left: `${p.x}%`, top: `${p.y}%` }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
-            >
-              <button
-                onPointerDown={(e) => handlePinPointerDown(e, p)}
-                className={`w-4 h-4 rounded-full border-2 touch-none ${
-                  selectedId === p.id ? "bg-amber-400 border-amber-600" : "bg-white border-accent"
-                }`}
-                title={p.sign_code || "Sign"}
-              />
-              {p.sign_code && (
-                <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
-                  {p.sign_code}
-                </span>
-              )}
-            </div>
-          ))}
+          {decisionPoints.map((p) => {
+            const design = signTypesById?.[p.sign_type_id]?.sign_design;
+            return (
+              <div
+                key={p.id}
+                id={`dp-pin-${p.id}`}
+                style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-move"
+              >
+                <button
+                  onPointerDown={(e) => handlePinPointerDown(e, p)}
+                  className={`touch-none flex items-center justify-center rounded-full ${
+                    selectedId === p.id ? "ring-2 ring-amber-500 bg-amber-50/70" : ""
+                  }`}
+                  style={{ transform: `rotate(${p.rotation || 0}deg)` }}
+                  title={p.sign_code || "Sign"}
+                >
+                  <SignMarker design={design} />
+                </button>
+                {p.sign_code && (
+                  <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none bg-white/90 px-1 py-0.5 rounded whitespace-nowrap text-ink/70 pointer-events-none">
+                    {p.sign_code}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

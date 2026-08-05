@@ -49,7 +49,8 @@ export default function SchedulePage({ params }) {
         unitCost = st.unit_cost != null ? Number(st.unit_cost).toFixed(2) : "";
         assignmentBadge = { label: "Selected", color: "emerald" };
       } else {
-        const result = crosscheckDecisionPoint(messages, point.needs_pictogram, signTypes || []);
+        const needsPictogram = messages.some((m) => !!m.pictogram_id);
+        const result = crosscheckDecisionPoint(messages, needsPictogram, signTypes || []);
         if (result.status === "auto") {
           signTypeName = `${result.signType.name} (suggested)`;
           unitCost = result.signType.unit_cost != null ? Number(result.signType.unit_cost).toFixed(2) : "";

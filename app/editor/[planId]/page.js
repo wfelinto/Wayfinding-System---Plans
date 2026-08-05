@@ -37,9 +37,9 @@ export default function EditorPage({ params }) {
     functional_area: "",
     mounting: "",
     comments: "",
-    needs_pictogram: false,
     status: "Draft",
     sign_type_id: "",
+    rotation: 0,
     message_slots: normalizeMessageSlots([]),
   });
   const [dpSaving, setDpSaving] = useState(false);
@@ -94,9 +94,9 @@ export default function EditorPage({ params }) {
           functional_area: dp.functional_area || "",
           mounting: dp.mounting || "",
           comments: dp.comments || "",
-          needs_pictogram: dp.needs_pictogram || false,
           status: dp.status || "Draft",
           sign_type_id: dp.sign_type_id || "",
+          rotation: dp.rotation || 0,
           message_slots: normalizeMessageSlots(dp.message_slots),
         });
       }
@@ -149,9 +149,9 @@ export default function EditorPage({ params }) {
         functional_area: dpForm.functional_area || null,
         mounting: dpForm.mounting || null,
         comments: dpForm.comments || null,
-        needs_pictogram: dpForm.needs_pictogram,
         status: dpForm.status,
         sign_type_id: dpForm.sign_type_id || null,
+        rotation: dpForm.rotation,
         message_slots: dpForm.message_slots,
       })
       .eq("id", selectedId);
@@ -205,7 +205,8 @@ export default function EditorPage({ params }) {
     setPdfError(null);
     setPdfBusy("plan");
     try {
-      await downloadPlanPdf(plan, imageUrl, decisionPoints);
+      const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
+      await downloadPlanPdf(plan, imageUrl, decisionPoints, signTypesById);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -298,6 +299,7 @@ export default function EditorPage({ params }) {
           decisionPoints={decisionPoints}
           selectedId={selectedId}
           addMode={addMode}
+          signTypesById={Object.fromEntries(signTypes.map((st) => [st.id, st]))}
           onCanvasClick={handleCanvasClick}
           onSelectDecisionPoint={setSelectedId}
           onMoveDecisionPoint={handleMoveDecisionPoint}
@@ -406,23 +408,19 @@ export default function EditorPage({ params }) {
                 />
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-ink/80">
-                <input
-                  type="checkbox"
-                  checked={dpForm.needs_pictogram}
-                  onChange={(e) => setDpForm({ ...dpForm, needs_pictogram: e.target.checked })}
-                />
-                Needs a pictogram
-              </label>
-
               <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Sign type</label>
+                <label className="block text-xs font-medium text-ink/70 mb-1">
+                  Sign type <span className="text-red-500">*</span>
+                </label>
                 <select
+                  required
                   value={dpForm.sign_type_id}
                   onChange={(e) => setDpForm({ ...dpForm, sign_type_id: e.target.value })}
                   className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
                 >
-                  <option value="">Not selected</option>
+                  <option value="" disabled>
+                    Select a sign type…
+                  </option>
                   {signTypes.map((st) => (
                     <option key={st.id} value={st.id}>
                       {st.name}
@@ -434,6 +432,21 @@ export default function EditorPage({ params }) {
                     No sign types yet — add some on the <a href="/kop" className="underline">KOP page</a>.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1 flex items-center justify-between">
+                  <span>Marker rotation</span>
+                  <span className="text-ink/40 font-normal">{dpForm.rotation}°</span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="359"
+                  value={dpForm.rotation}
+                  onChange={(e) => setDpForm({ ...dpForm, rotation: Number(e.target.value) })}
+                  className="w-full"
+                />
               </div>
 
               <div>

@@ -10,8 +10,11 @@ const emptyForm = {
   supports_pictogram: true,
   mounting: "wall",
   unit_cost: "",
+  sign_design: "One Side Panel",
   notes: "",
 };
+
+const SIGN_DESIGN_OPTIONS = ["One Side Panel", "Two-Sided Structure", "4-Sided Structure"];
 
 export default function KopPage() {
   const [signTypes, setSignTypes] = useState([]);
@@ -44,6 +47,7 @@ export default function KopPage() {
       supports_pictogram: form.supports_pictogram,
       mounting: form.mounting,
       unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
+      sign_design: form.sign_design,
       notes: form.notes || null,
     });
     if (error) {
@@ -119,6 +123,22 @@ export default function KopPage() {
           </div>
 
           <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Sign design</label>
+            <select
+              value={form.sign_design}
+              onChange={(e) => setForm({ ...form, sign_design: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              {SIGN_DESIGN_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-ink/40 mt-1">Determines the marker shape shown on the plan.</p>
+          </div>
+
+          <div>
             <label className="block text-xs font-medium text-ink/70 mb-1">Unit cost</label>
             <input
               type="number"
@@ -178,6 +198,7 @@ export default function KopPage() {
                     {st.max_chars_per_line ? `, ${st.max_chars_per_line} chars/line` : ""}
                     {" · "}
                     {st.mounting}
+                    {st.sign_design ? ` · ${st.sign_design}` : ""}
                     {st.supports_pictogram ? "" : " · no pictograms"}
                     {st.unit_cost != null ? ` · $${Number(st.unit_cost).toFixed(2)}` : ""}
                   </p>
