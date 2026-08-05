@@ -4,9 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   crosscheckDecisionPoint,
-  nonEmptyMessagesForDesign,
+  sidesForDesign,
+  nonEmptyMessagesForSide,
   formatMessageLine,
 } from "@/lib/crosscheck";
+
+const ALL_SIDES = ["A", "B", "C", "D"];
 
 const STATUS_COLORS = {
   Draft: "bg-black/5 text-ink/60 border-black/10",
@@ -42,16 +45,21 @@ export default function SchedulePage({ params }) {
     const results = (points || []).map((point, index) => {
       const assignedSignType = point.sign_type_id ? signTypesById[point.sign_type_id] : null;
       const design = assignedSignType?.sign_design;
-      const sideGroups = nonEmptyMessagesForDesign(point.message_slots, design);
-      const sideArrays = sideGroups.map((g) => g.messages);
-      const needsPictogram = sideArrays.flat().some((m) => !!m.pictogram_id);
+      const relevantSides = sidesForDesign(design);
 
-      // "A: msg1; msg2 | B: msg3" — only sides that actually have
-      // content appear, each labeled so multi-sided signs stay readable.
-      const messagesCell = sideGroups
-        .filter((g) => g.messages.length > 0)
-        .map((g) => `${g.side}: ${g.messages.map((m) => formatMessageLine(m, pictogramsById)).join("; ")}`)
-        .join(" | ");
+      // One string per side (A/B/C/D). Sides not relevant to this sign's
+      // design stay blank, rather than showing stale data from a
+      // previous design assignment.
+      const sideMessages = { A: "", B: "", C: "", D: "" };
+      for (const side of relevantSides) {
+        const msgs = nonEmptyMessagesForSide(point.message_slots, side);
+        if (msgs.length > 0) {
+          sideMessages[side] = msgs.map((m) => formatMessageLine(m, pictogramsById)).join("; ");
+        }
+      }
+
+      const sideArrays = relevantSides.map((side) => nonEmptyMessagesForSide(point.message_slots, side));
+      const needsPictogram = sideArrays.flat().some((m) => !!m.pictogram_id);
 
       let signTypeName = "";
       let unitCost = "";
@@ -83,7 +91,7 @@ export default function SchedulePage({ params }) {
         functionalArea: point.functional_area || "",
         mounting: point.mounting || "",
         comments: point.comments || "",
-        messagesCell,
+        sideMessages,
         signTypeName,
         unitCost,
         assignmentBadge,
@@ -104,7 +112,10 @@ export default function SchedulePage({ params }) {
       "Sign code",
       "Location",
       "Functional Area",
-      "Messages",
+      "Messages - Side A",
+      "Messages - Side B",
+      "Messages - Side C",
+      "Messages - Side D",
       "Comments",
       "Mounting",
       "Sign Type",
@@ -115,7 +126,10 @@ export default function SchedulePage({ params }) {
       r.signCode,
       r.location,
       r.functionalArea,
-      r.messagesCell,
+      r.sideMessages.A,
+      r.sideMessages.B,
+      r.sideMessages.C,
+      r.sideMessages.D,
       r.comments,
       r.mounting,
       r.signTypeName,
@@ -158,7 +172,7 @@ export default function SchedulePage({ params }) {
       </div>
       <p className="text-ink/60 mb-6">
         Sign type shown is your manual selection where set, otherwise a suggestion from the KOP crosscheck.
-        Multi-sided signs show each side's messages labeled (A:, B:, ...).
+        Message side columns only fill in for sides that apply to the sign's design.
       </p>
 
       {loading && <p className="text-ink/50">Loading...</p>}
@@ -185,7 +199,11 @@ export default function SchedulePage({ params }) {
                   <th className="px-4 py-2 font-medium">Sign code</th>
                   <th className="px-4 py-2 font-medium">Location</th>
                   <th className="px-4 py-2 font-medium">Functional Area</th>
-                  <th className="px-4 py-2 font-medium">Messages</th>
+                  {ALL_SIDES.map((side) => (
+                    <th key={side} className="px-4 py-2 font-medium">
+                      Messages - Side {side}
+                    </th>
+                  ))}
                   <th className="px-4 py-2 font-medium">Comments</th>
                   <th className="px-4 py-2 font-medium">Mounting</th>
                   <th className="px-4 py-2 font-medium">Sign type</th>
@@ -199,7 +217,11 @@ export default function SchedulePage({ params }) {
                     <td className="px-4 py-3 text-ink/80 font-medium whitespace-nowrap">{r.signCode}</td>
                     <td className="px-4 py-3 text-ink/70">{r.location || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">{r.functionalArea || "—"}</td>
-                    <td className="px-4 py-3 text-ink/70">{r.messagesCell || "—"}</td>
+                    {ALL_SIDES.map((side) => (
+                      <td key={side} className="px-4 py-3 text-ink/70">
+                        {r.sideMessages[side] || "—"}
+                      </td>
+                    ))}
                     <td className="px-4 py-3 text-ink/70">{r.comments || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">{r.mounting || "—"}</td>
                     <td className="px-4 py-3 text-ink/80 whitespace-nowrap">
