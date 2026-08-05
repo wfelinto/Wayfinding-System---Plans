@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlanCanvas from "@/components/PlanCanvas";
 import { downloadPlanPdf, downloadSignReportPdf } from "@/lib/pdfExport";
-import { normalizeMessageSlots } from "@/lib/crosscheck";
+import { normalizeMessageSlots, sidesForDesign } from "@/lib/crosscheck";
 import { ARROW_OPTIONS } from "@/lib/arrows";
 import PictogramPicker from "@/components/PictogramPicker";
 
@@ -126,12 +126,12 @@ export default function EditorPage({ params }) {
     loadGeometry();
   }
 
-  function updateMessageSlot(index, field, value) {
+  function updateMessageSlot(side, index, field, value) {
     setDpForm((prev) => {
-      const slots = prev.message_slots.map((slot, i) =>
+      const sideSlots = prev.message_slots[side].map((slot, i) =>
         i === index ? { ...slot, [field]: value } : slot
       );
-      return { ...prev, message_slots: slots };
+      return { ...prev, message_slots: { ...prev.message_slots, [side]: sideSlots } };
     });
   }
 
@@ -361,42 +361,53 @@ export default function EditorPage({ params }) {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Messages</label>
-                <div className="space-y-1.5">
-                  {dpForm.message_slots.map((slot, i) => (
-                    <div key={i} className="flex gap-1.5">
-                      <input
-                        value={slot.text}
-                        onChange={(e) => updateMessageSlot(i, "text", e.target.value)}
-                        placeholder={`Message ${i + 1}`}
-                        className="flex-1 min-w-0 border border-black/15 rounded-md px-2 py-1 text-xs"
-                      />
-                      <select
-                        value={slot.arrow}
-                        onChange={(e) => updateMessageSlot(i, "arrow", e.target.value)}
-                        className="w-20 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
-                      >
-                        {ARROW_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <PictogramPicker
-                        pictograms={pictograms}
-                        value={slot.pictogram_id}
-                        onChange={(id) => updateMessageSlot(i, "pictogram_id", id)}
-                      />
+              {(() => {
+                const selectedSignType = signTypes.find((st) => st.id === dpForm.sign_type_id);
+                const activeSides = sidesForDesign(selectedSignType?.sign_design);
+                return activeSides.map((side) => (
+                  <div key={side}>
+                    <label className="block text-xs font-medium text-ink/70 mb-1">
+                      Messages - Side {side}
+                    </label>
+                    <div className="space-y-1.5">
+                      {dpForm.message_slots[side].map((slot, i) => (
+                        <div key={i} className="flex gap-1.5">
+                          <input
+                            value={slot.text}
+                            onChange={(e) => updateMessageSlot(side, i, "text", e.target.value)}
+                            placeholder={`Message ${i + 1}`}
+                            className="flex-1 min-w-0 border border-black/15 rounded-md px-2 py-1 text-xs"
+                          />
+                          <select
+                            value={slot.arrow}
+                            onChange={(e) => updateMessageSlot(side, i, "arrow", e.target.value)}
+                            className="w-20 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
+                          >
+                            {ARROW_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <PictogramPicker
+                            pictograms={pictograms}
+                            value={slot.pictogram_id}
+                            onChange={(id) => updateMessageSlot(side, i, "pictogram_id", id)}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <p className="text-xs text-ink/40 mt-1">
-                  All ten messages together form one Messages cell in the export, each with its arrow and
-                  pictogram. Manage the pictogram library on the{" "}
-                  <a href="/pictograms" className="underline">Pictograms page</a>.
-                </p>
-              </div>
+                    {side === activeSides[activeSides.length - 1] && (
+                      <p className="text-xs text-ink/40 mt-1">
+                        Each side's ten messages form one Messages cell in the export, each with its arrow
+                        and pictogram. The number of sides shown here follows the selected sign type's
+                        design. Manage the pictogram library on the{" "}
+                        <a href="/pictograms" className="underline">Pictograms page</a>.
+                      </p>
+                    )}
+                  </div>
+                ));
+              })()}
 
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Comments</label>

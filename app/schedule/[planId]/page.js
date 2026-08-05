@@ -2,7 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { crosscheckDecisionPoint, nonEmptyMessages, formatMessageLine } from "@/lib/crosscheck";
+import {
+  crosscheckDecisionPoint,
+  nonEmptyMessagesForDesign,
+  formatMessageLine,
+} from "@/lib/crosscheck";
 
 const STATUS_COLORS = {
   Draft: "bg-black/5 text-ink/60 border-black/10",
@@ -36,21 +40,29 @@ export default function SchedulePage({ params }) {
     const pictogramsById = Object.fromEntries((pictograms || []).map((p) => [p.id, p]));
 
     const results = (points || []).map((point, index) => {
-      const messages = nonEmptyMessages(point.message_slots);
-      const messageLines = messages.map((m) => formatMessageLine(m, pictogramsById));
+      const assignedSignType = point.sign_type_id ? signTypesById[point.sign_type_id] : null;
+      const design = assignedSignType?.sign_design;
+      const sideGroups = nonEmptyMessagesForDesign(point.message_slots, design);
+      const sideArrays = sideGroups.map((g) => g.messages);
+      const needsPictogram = sideArrays.flat().some((m) => !!m.pictogram_id);
+
+      // "A: msg1; msg2 | B: msg3" — only sides that actually have
+      // content appear, each labeled so multi-sided signs stay readable.
+      const messagesCell = sideGroups
+        .filter((g) => g.messages.length > 0)
+        .map((g) => `${g.side}: ${g.messages.map((m) => formatMessageLine(m, pictogramsById)).join("; ")}`)
+        .join(" | ");
 
       let signTypeName = "";
       let unitCost = "";
       let assignmentBadge;
 
-      if (point.sign_type_id && signTypesById[point.sign_type_id]) {
-        const st = signTypesById[point.sign_type_id];
-        signTypeName = st.name;
-        unitCost = st.unit_cost != null ? Number(st.unit_cost).toFixed(2) : "";
+      if (assignedSignType) {
+        signTypeName = assignedSignType.name;
+        unitCost = assignedSignType.unit_cost != null ? Number(assignedSignType.unit_cost).toFixed(2) : "";
         assignmentBadge = { label: "Selected", color: "emerald" };
       } else {
-        const needsPictogram = messages.some((m) => !!m.pictogram_id);
-        const result = crosscheckDecisionPoint(messages, needsPictogram, signTypes || []);
+        const result = crosscheckDecisionPoint(sideArrays, needsPictogram, signTypes || []);
         if (result.status === "auto") {
           signTypeName = `${result.signType.name} (suggested)`;
           unitCost = result.signType.unit_cost != null ? Number(result.signType.unit_cost).toFixed(2) : "";
@@ -71,7 +83,7 @@ export default function SchedulePage({ params }) {
         functionalArea: point.functional_area || "",
         mounting: point.mounting || "",
         comments: point.comments || "",
-        messageLines,
+        messagesCell,
         signTypeName,
         unitCost,
         assignmentBadge,
@@ -103,7 +115,7 @@ export default function SchedulePage({ params }) {
       r.signCode,
       r.location,
       r.functionalArea,
-      r.messageLines.join("; "),
+      r.messagesCell,
       r.comments,
       r.mounting,
       r.signTypeName,
@@ -146,6 +158,7 @@ export default function SchedulePage({ params }) {
       </div>
       <p className="text-ink/60 mb-6">
         Sign type shown is your manual selection where set, otherwise a suggestion from the KOP crosscheck.
+        Multi-sided signs show each side's messages labeled (A:, B:, ...).
       </p>
 
       {loading && <p className="text-ink/50">Loading...</p>}
@@ -186,9 +199,7 @@ export default function SchedulePage({ params }) {
                     <td className="px-4 py-3 text-ink/80 font-medium whitespace-nowrap">{r.signCode}</td>
                     <td className="px-4 py-3 text-ink/70">{r.location || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">{r.functionalArea || "—"}</td>
-                    <td className="px-4 py-3 text-ink/70">
-                      {r.messageLines.length === 0 ? "—" : r.messageLines.join("; ")}
-                    </td>
+                    <td className="px-4 py-3 text-ink/70">{r.messagesCell || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">{r.comments || "—"}</td>
                     <td className="px-4 py-3 text-ink/70">{r.mounting || "—"}</td>
                     <td className="px-4 py-3 text-ink/80 whitespace-nowrap">
