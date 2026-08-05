@@ -152,7 +152,7 @@ export default function EditorPage({ params }) {
     loadGeometry();
   }
 
-  async function handleImageUpload(e) {
+  async function handleFileUpload(e, field) {
     const file = e.target.files?.[0];
     if (!file || !selectedId) return;
     setImageUploading(true);
@@ -161,7 +161,7 @@ export default function EditorPage({ params }) {
       const filePath = `${crypto.randomUUID()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from("dot-images").upload(filePath, file);
       if (uploadError) throw uploadError;
-      await supabase.from("decision_points").update({ image_path: filePath }).eq("id", selectedId);
+      await supabase.from("decision_points").update({ [field]: filePath }).eq("id", selectedId);
       loadGeometry();
     } catch (err) {
       alert(`Image upload failed: ${err.message}`);
@@ -217,6 +217,9 @@ export default function EditorPage({ params }) {
   const selectedPoint = decisionPoints.find((p) => p.id === selectedId) || null;
   const selectedPointImageUrl = selectedPoint?.image_path
     ? supabase.storage.from("dot-images").getPublicUrl(selectedPoint.image_path).data.publicUrl
+    : null;
+  const selectedPointArtworkUrl = selectedPoint?.artwork_path
+    ? supabase.storage.from("dot-images").getPublicUrl(selectedPoint.artwork_path).data.publicUrl
     : null;
 
   if (!plan || !imageUrl) return <p className="text-ink/50">Loading plan...</p>;
@@ -418,25 +421,45 @@ export default function EditorPage({ params }) {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Photo</label>
-                {selectedPointImageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={selectedPointImageUrl}
-                    alt="Sign location"
-                    className="w-full max-h-40 object-cover rounded-md border border-black/10 mb-2"
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-ink/70 mb-1">Photo</label>
+                  {selectedPointImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedPointImageUrl}
+                      alt="Sign location"
+                      className="w-full max-h-32 object-cover rounded-md border border-black/10 mb-2"
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "image_path")}
+                    disabled={imageUploading}
+                    className="w-full text-xs"
                   />
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={imageUploading}
-                  className="w-full text-xs"
-                />
-                {imageUploading && <p className="text-xs text-ink/40 mt-1">Uploading...</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink/70 mb-1">Artwork</label>
+                  {selectedPointArtworkUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedPointArtworkUrl}
+                      alt="Sign artwork"
+                      className="w-full max-h-32 object-cover rounded-md border border-black/10 mb-2"
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "artwork_path")}
+                    disabled={imageUploading}
+                    className="w-full text-xs"
+                  />
+                </div>
               </div>
+              {imageUploading && <p className="text-xs text-ink/40">Uploading...</p>}
 
               {dpSaveError && (
                 <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-2 text-xs">
