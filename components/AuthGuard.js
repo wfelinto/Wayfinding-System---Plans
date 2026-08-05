@@ -62,6 +62,7 @@ export default function AuthGuard({ children }) {
           <nav className="flex items-center gap-6 text-sm text-ink/70">
             <a href="/" className="hover:text-ink">Projects</a>
             <a href="/kop" className="hover:text-ink">Sign types (KOP)</a>
+            <a href="/pictograms" className="hover:text-ink">Pictograms</a>
             <span className="text-ink/30">|</span>
             <span className="text-ink/50 hidden sm:inline">{session.user.email}</span>
             <button onClick={handleLogout} className="hover:text-ink">

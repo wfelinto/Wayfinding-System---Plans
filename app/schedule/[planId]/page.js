@@ -24,32 +24,41 @@ export default function SchedulePage({ params }) {
   const run = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: planData }, { data: points }, { data: signTypes }] = await Promise.all([
+    const [{ data: planData }, { data: points }, { data: signTypes }, { data: pictograms }] = await Promise.all([
       supabase.from("plans").select("*").eq("id", planId).single(),
       supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
       supabase.from("sign_types").select("*"),
+      supabase.from("pictograms").select("*"),
     ]);
     setPlan(planData);
 
     const signTypesById = Object.fromEntries((signTypes || []).map((st) => [st.id, st]));
+    const pictogramsById = Object.fromEntries((pictograms || []).map((p) => [p.id, p]));
 
     const results = (points || []).map((point, index) => {
       const messages = nonEmptyMessages(point.message_slots);
-      const messageLines = messages.map(formatMessageLine);
+      const messageLines = messages.map((m) => formatMessageLine(m, pictogramsById));
 
-      let signTypeName;
+      let signTypeName = "";
+      let unitCost = "";
       let assignmentBadge;
 
       if (point.sign_type_id && signTypesById[point.sign_type_id]) {
-        signTypeName = signTypesById[point.sign_type_id].name;
+        const st = signTypesById[point.sign_type_id];
+        signTypeName = st.name;
+        unitCost = st.unit_cost != null ? Number(st.unit_cost).toFixed(2) : "";
         assignmentBadge = { label: "Selected", color: "emerald" };
       } else {
         const result = crosscheckDecisionPoint(messages, point.needs_pictogram, signTypes || []);
         if (result.status === "auto") {
           signTypeName = `${result.signType.name} (suggested)`;
+          unitCost = result.signType.unit_cost != null ? Number(result.signType.unit_cost).toFixed(2) : "";
           assignmentBadge = { label: "Suggested", color: "amber" };
         } else {
-          signTypeName = "—";
+          // Deliberately blank rather than a placeholder character — a
+          // "—" fallback here previously showed as garbled text when
+          // opened in Excel due to a CSV encoding issue.
+          signTypeName = "";
           assignmentBadge = { label: "Conflict", color: "red", reason: result.reason };
         }
       }
@@ -59,9 +68,11 @@ export default function SchedulePage({ params }) {
         signCode: point.sign_code || `Sign ${index + 1}`,
         location: point.location || "",
         functionalArea: point.functional_area || "",
+        mounting: point.mounting || "",
         comments: point.comments || "",
         messageLines,
         signTypeName,
+        unitCost,
         assignmentBadge,
         status: point.status || "Draft",
       };
@@ -82,7 +93,9 @@ export default function SchedulePage({ params }) {
       "Functional Area",
       "Messages",
       "Comments",
+      "Mounting",
       "Sign Type",
+      "Unit Cost",
       "Approval Status",
     ];
     const lines = rows.map((r) => [
@@ -91,13 +104,18 @@ export default function SchedulePage({ params }) {
       r.functionalArea,
       r.messageLines.join("; "),
       r.comments,
+      r.mounting,
       r.signTypeName,
+      r.unitCost,
       r.status,
     ]);
     const csv = [header, ...lines]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    // A UTF-8 BOM is required for Excel specifically — without it, Excel
+    // assumes the system codepage instead of UTF-8, and any non-ASCII
+    // character (arrows, accented names, etc.) renders as garbled text.
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -155,7 +173,9 @@ export default function SchedulePage({ params }) {
                   <th className="px-4 py-2 font-medium">Functional Area</th>
                   <th className="px-4 py-2 font-medium">Messages</th>
                   <th className="px-4 py-2 font-medium">Comments</th>
+                  <th className="px-4 py-2 font-medium">Mounting</th>
                   <th className="px-4 py-2 font-medium">Sign type</th>
+                  <th className="px-4 py-2 font-medium">Unit cost</th>
                   <th className="px-4 py-2 font-medium">Approval status</th>
                 </tr>
               </thead>
@@ -169,8 +189,12 @@ export default function SchedulePage({ params }) {
                       {r.messageLines.length === 0 ? "—" : r.messageLines.join("; ")}
                     </td>
                     <td className="px-4 py-3 text-ink/70">{r.comments || "—"}</td>
+                    <td className="px-4 py-3 text-ink/70">{r.mounting || "—"}</td>
                     <td className="px-4 py-3 text-ink/80 whitespace-nowrap">
-                      <span title={r.assignmentBadge.reason}>{r.signTypeName}</span>
+                      <span title={r.assignmentBadge.reason}>{r.signTypeName || "—"}</span>
+                    </td>
+                    <td className="px-4 py-3 text-ink/70 whitespace-nowrap">
+                      {r.unitCost ? `$${r.unitCost}` : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span

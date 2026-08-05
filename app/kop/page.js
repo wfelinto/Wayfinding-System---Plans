@@ -9,6 +9,7 @@ const emptyForm = {
   max_chars_per_line: "",
   supports_pictogram: true,
   mounting: "wall",
+  unit_cost: "",
   notes: "",
 };
 
@@ -42,6 +43,7 @@ export default function KopPage() {
       max_chars_per_line: form.max_chars_per_line ? Number(form.max_chars_per_line) : null,
       supports_pictogram: form.supports_pictogram,
       mounting: form.mounting,
+      unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
       notes: form.notes || null,
     });
     if (error) {
@@ -116,6 +118,19 @@ export default function KopPage() {
             </select>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Unit cost</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.unit_cost}
+              onChange={(e) => setForm({ ...form, unit_cost: e.target.value })}
+              placeholder="optional"
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
+            />
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-ink/80">
             <input
               type="checkbox"
@@ -164,6 +179,7 @@ export default function KopPage() {
                     {" · "}
                     {st.mounting}
                     {st.supports_pictogram ? "" : " · no pictograms"}
+                    {st.unit_cost != null ? ` · $${Number(st.unit_cost).toFixed(2)}` : ""}
                   </p>
                   {st.notes && <p className="text-sm text-ink/50 mt-1">{st.notes}</p>}
                 </div>

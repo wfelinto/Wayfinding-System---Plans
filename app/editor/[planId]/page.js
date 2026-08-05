@@ -6,6 +6,7 @@ import PlanCanvas from "@/components/PlanCanvas";
 import { downloadPlanPdf, downloadSignReportPdf } from "@/lib/pdfExport";
 import { normalizeMessageSlots } from "@/lib/crosscheck";
 import { ARROW_OPTIONS } from "@/lib/arrows";
+import PictogramPicker from "@/components/PictogramPicker";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -25,6 +26,7 @@ export default function EditorPage({ params }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [decisionPoints, setDecisionPoints] = useState([]);
   const [signTypes, setSignTypes] = useState([]);
+  const [pictograms, setPictograms] = useState([]);
 
   const [addMode, setAddMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -33,6 +35,7 @@ export default function EditorPage({ params }) {
     sign_code: "",
     location: "",
     functional_area: "",
+    mounting: "",
     comments: "",
     needs_pictogram: false,
     status: "Draft",
@@ -56,12 +59,19 @@ export default function EditorPage({ params }) {
   }, [planId]);
 
   const loadGeometry = useCallback(async () => {
-    const [dp, st] = await Promise.all([
+    const [dp, st, pic] = await Promise.all([
       supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
       supabase.from("sign_types").select("*").order("name"),
+      supabase.from("pictograms").select("*").order("name"),
     ]);
     setDecisionPoints(dp.data || []);
     setSignTypes(st.data || []);
+    setPictograms(
+      (pic.data || []).map((p) => ({
+        ...p,
+        imageUrl: supabase.storage.from("pictograms").getPublicUrl(p.image_path).data.publicUrl,
+      }))
+    );
   }, [planId]);
 
   useEffect(() => {
@@ -82,6 +92,7 @@ export default function EditorPage({ params }) {
           sign_code: dp.sign_code || "",
           location: dp.location || "",
           functional_area: dp.functional_area || "",
+          mounting: dp.mounting || "",
           comments: dp.comments || "",
           needs_pictogram: dp.needs_pictogram || false,
           status: dp.status || "Draft",
@@ -136,6 +147,7 @@ export default function EditorPage({ params }) {
         sign_code: dpForm.sign_code || null,
         location: dpForm.location || null,
         functional_area: dpForm.functional_area || null,
+        mounting: dpForm.mounting || null,
         comments: dpForm.comments || null,
         needs_pictogram: dpForm.needs_pictogram,
         status: dpForm.status,
@@ -206,7 +218,8 @@ export default function EditorPage({ params }) {
     setPdfBusy("report");
     try {
       const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
-      await downloadSignReportPdf(plan, imageUrl, decisionPoints, signTypesById);
+      const pictogramsById = Object.fromEntries(pictograms.map((p) => [p.id, p]));
+      await downloadSignReportPdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -336,6 +349,16 @@ export default function EditorPage({ params }) {
               </div>
 
               <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1">Mounting</label>
+                <input
+                  value={dpForm.mounting}
+                  onChange={(e) => setDpForm({ ...dpForm, mounting: e.target.value })}
+                  placeholder="e.g. Wall-mounted, 2.1m AFF"
+                  className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Messages</label>
                 <div className="space-y-1.5">
                   {dpForm.message_slots.map((slot, i) => (
@@ -349,7 +372,7 @@ export default function EditorPage({ params }) {
                       <select
                         value={slot.arrow}
                         onChange={(e) => updateMessageSlot(i, "arrow", e.target.value)}
-                        className="w-24 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
+                        className="w-20 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
                       >
                         {ARROW_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -357,11 +380,18 @@ export default function EditorPage({ params }) {
                           </option>
                         ))}
                       </select>
+                      <PictogramPicker
+                        pictograms={pictograms}
+                        value={slot.pictogram_id}
+                        onChange={(id) => updateMessageSlot(i, "pictogram_id", id)}
+                      />
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-ink/40 mt-1">
-                  All ten messages together form one Messages cell in the export, each with its arrow.
+                  All ten messages together form one Messages cell in the export, each with its arrow and
+                  pictogram. Manage the pictogram library on the{" "}
+                  <a href="/pictograms" className="underline">Pictograms page</a>.
                 </p>
               </div>
 
