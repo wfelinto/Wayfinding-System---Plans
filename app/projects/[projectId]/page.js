@@ -149,9 +149,12 @@ export default function ProjectPage({ params }) {
                     </button>
                   </div>
                 </div>
-                <div className="flex gap-3 mt-4 text-sm">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 text-sm">
+                  <a href={`/editor/${plan.id}/dots`} className="text-accent font-medium hover:underline">
+                    Open Dot Plan Editor
+                  </a>
                   <a href={`/editor/${plan.id}`} className="text-accent font-medium hover:underline">
-                    Open editor
+                    Open Message Schedule Editor
                   </a>
                   <a href={`/schedule/${plan.id}`} className="text-ink/60 hover:underline">
                     View schedule
