@@ -42,7 +42,9 @@ export default function SchedulePage({ params }) {
     const signTypesById = Object.fromEntries((signTypes || []).map((st) => [st.id, st]));
     const pictogramsById = Object.fromEntries((pictograms || []).map((p) => [p.id, p]));
 
-    const results = (points || []).map((point, index) => {
+    const results = (points || [])
+      .filter((point) => point.point_type !== "dot")
+      .map((point, index) => {
       const assignedSignType = point.sign_type_id ? signTypesById[point.sign_type_id] : null;
       const design = assignedSignType?.sign_design;
       const relevantSides = sidesForDesign(design);

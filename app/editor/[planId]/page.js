@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlanCanvas from "@/components/PlanCanvas";
-import { downloadPlanPdf, downloadSignReportPdf } from "@/lib/pdfExport";
+import { downloadPlanPdf, downloadMessageSchedulePdf, downloadDotPlanReportPdf } from "@/lib/pdfExport";
 import { normalizeMessageSlots, sidesForDesign } from "@/lib/crosscheck";
 import { ARROW_OPTIONS } from "@/lib/arrows";
 import PictogramPicker from "@/components/PictogramPicker";
@@ -28,7 +28,7 @@ export default function EditorPage({ params }) {
   const [signTypes, setSignTypes] = useState([]);
   const [pictograms, setPictograms] = useState([]);
 
-  const [addMode, setAddMode] = useState(false);
+  const [addModeType, setAddModeType] = useState(null); // null | 'sign' | 'dot'
   const [selectedId, setSelectedId] = useState(null);
 
   const [dpForm, setDpForm] = useState({
@@ -104,7 +104,13 @@ export default function EditorPage({ params }) {
   }, [selectedId, decisionPoints]);
 
   async function handleCanvasClick(xPct, yPct) {
-    const nextSignCode = `Sign ${decisionPoints.length + 1}`;
+    if (!addModeType) return;
+    const isDot = addModeType === "dot";
+    const sameTypeCount = decisionPoints.filter((p) =>
+      isDot ? p.point_type === "dot" : p.point_type !== "dot"
+    ).length;
+    const nextCode = isDot ? `Dot ${sameTypeCount + 1}` : `Sign ${sameTypeCount + 1}`;
+
     const { data: inserted, error } = await supabase
       .from("decision_points")
       .insert({
@@ -112,7 +118,8 @@ export default function EditorPage({ params }) {
         x: xPct,
         y: yPct,
         sequence_order: decisionPoints.length,
-        sign_code: nextSignCode,
+        sign_code: nextCode,
+        point_type: isDot ? "dot" : "sign",
       })
       .select()
       .single();
@@ -214,13 +221,25 @@ export default function EditorPage({ params }) {
     }
   }
 
-  async function handleDownloadSignReport() {
+  async function handleDownloadMessageSchedule() {
     setPdfError(null);
-    setPdfBusy("report");
+    setPdfBusy("schedule");
     try {
       const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
       const pictogramsById = Object.fromEntries(pictograms.map((p) => [p.id, p]));
-      await downloadSignReportPdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById);
+      await downloadMessageSchedulePdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById);
+    } catch (err) {
+      setPdfError(err.message);
+    } finally {
+      setPdfBusy(null);
+    }
+  }
+
+  async function handleDownloadDotPlanReport() {
+    setPdfError(null);
+    setPdfBusy("dots");
+    try {
+      await downloadDotPlanReportPdf(plan, imageUrl, decisionPoints);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -252,12 +271,20 @@ export default function EditorPage({ params }) {
         </div>
         <div className="flex flex-wrap gap-2 items-start">
           <button
-            onClick={() => setAddMode((v) => !v)}
+            onClick={() => setAddModeType((v) => (v === "sign" ? null : "sign"))}
             className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-              addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
+              addModeType === "sign" ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
             }`}
           >
-            Add Sign Location
+            Add Sign Type
+          </button>
+          <button
+            onClick={() => setAddModeType((v) => (v === "dot" ? null : "dot"))}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
+              addModeType === "dot" ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
+            }`}
+          >
+            Add Dot Location
           </button>
           <button
             onClick={clearAll}
@@ -274,11 +301,18 @@ export default function EditorPage({ params }) {
             {pdfBusy === "plan" ? "Preparing..." : "Download plan PDF"}
           </button>
           <button
-            onClick={handleDownloadSignReport}
+            onClick={handleDownloadDotPlanReport}
             disabled={pdfBusy !== null}
             className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
           >
-            {pdfBusy === "report" ? "Preparing..." : "Download sign report PDF"}
+            {pdfBusy === "dots" ? "Preparing..." : "Download Dot Plan Report PDF"}
+          </button>
+          <button
+            onClick={handleDownloadMessageSchedule}
+            disabled={pdfBusy !== null}
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
+          >
+            {pdfBusy === "schedule" ? "Preparing..." : "Download Message Schedule PDF"}
           </button>
         </div>
       </div>
@@ -288,9 +322,9 @@ export default function EditorPage({ params }) {
       )}
 
       <p className="text-sm text-ink/50 mb-3">
-        {addMode
-          ? "Click the plan to place a new sign. Click an existing pin to select it instead."
-          : "Drag a pin to move it, or click one to view and edit its details."}
+        {addModeType === "sign" && "Click the plan to place a new sign. Click an existing pin to select it instead."}
+        {addModeType === "dot" && "Click the plan to place a new dot location. Click an existing pin to select it instead."}
+        {!addModeType && "Drag a pin to move it, or click one to view and edit its details."}
       </p>
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-6">
@@ -298,7 +332,7 @@ export default function EditorPage({ params }) {
           imageUrl={imageUrl}
           decisionPoints={decisionPoints}
           selectedId={selectedId}
-          addMode={addMode}
+          addMode={addModeType !== null}
           signTypesById={Object.fromEntries(signTypes.map((st) => [st.id, st]))}
           previewRotation={selectedId ? dpForm.rotation : null}
           onCanvasClick={handleCanvasClick}
@@ -327,7 +361,7 @@ export default function EditorPage({ params }) {
                   onClick={deleteThisSign}
                   className="text-xs text-red-600 hover:underline shrink-0 mt-5"
                 >
-                  Delete this sign
+                  Delete this {selectedPoint.point_type === "dot" ? "dot" : "sign"}
                 </button>
               </div>
 
@@ -341,6 +375,8 @@ export default function EditorPage({ params }) {
                 />
               </div>
 
+              {selectedPoint.point_type !== "dot" && (
+              <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Functional area</label>
                 <input
@@ -408,6 +444,8 @@ export default function EditorPage({ params }) {
                   </div>
                 ));
               })()}
+              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">Comments</label>
@@ -420,12 +458,14 @@ export default function EditorPage({ params }) {
                 />
               </div>
 
+              {selectedPoint.point_type !== "dot" && (
+              <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-ink/70 mb-1">
                   Sign type <span className="text-red-500">*</span>
                 </label>
                 <select
-                  required
+                  required={selectedPoint.point_type !== "dot"}
                   value={dpForm.sign_type_id}
                   onChange={(e) => setDpForm({ ...dpForm, sign_type_id: e.target.value })}
                   className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
@@ -515,6 +555,8 @@ export default function EditorPage({ params }) {
                 </div>
               </div>
               {imageUploading && <p className="text-xs text-ink/40">Uploading...</p>}
+              </div>
+              )}
 
               {dpSaveError && (
                 <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-2 text-xs">
@@ -537,9 +579,10 @@ export default function EditorPage({ params }) {
             </form>
           ) : (
             <div className="border border-dashed border-black/15 rounded-lg p-6 text-center text-sm text-ink/40">
-              {addMode
-                ? "Click the plan to place a new sign."
-                : "Select a pin to view and edit its details, or click \"Add Sign Location\" to place a new one."}
+              {addModeType === "sign" && "Click the plan to place a new sign."}
+              {addModeType === "dot" && "Click the plan to place a new dot location."}
+              {!addModeType &&
+                "Select a pin to view and edit its details, or click \"Add Sign Type\" / \"Add Dot Location\" to place a new one."}
             </div>
           )}
         </div>

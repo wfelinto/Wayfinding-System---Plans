@@ -154,7 +154,7 @@ export default function PlanCanvas({
           />
 
           {decisionPoints.map((p) => {
-            const design = signTypesById?.[p.sign_type_id]?.sign_design;
+            const design = p.point_type === "dot" ? null : signTypesById?.[p.sign_type_id]?.sign_design;
             const rotation = p.id === selectedId && previewRotation != null ? previewRotation : p.rotation || 0;
             return (
               <div
