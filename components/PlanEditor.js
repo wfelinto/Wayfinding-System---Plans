@@ -7,6 +7,8 @@ import { downloadPlanPdf, downloadMessageSchedulePdf, downloadDotPlanReportPdf }
 import { normalizeMessageSlots, sidesForDesign } from "@/lib/crosscheck";
 import { ARROW_OPTIONS } from "@/lib/arrows";
 import PictogramPicker from "@/components/PictogramPicker";
+import { renderPdfFirstPageToBlob } from "@/lib/pdfToImage";
+import { normalizeImageToPngBlob } from "@/lib/normalizeImage";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -58,6 +60,8 @@ export default function PlanEditor({ planId, mode }) {
   const [imageUploading, setImageUploading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(null);
   const [pdfError, setPdfError] = useState(null);
+  const [planFileUpdating, setPlanFileUpdating] = useState(false);
+  const [planFileError, setPlanFileError] = useState(null);
 
   const loadPlan = useCallback(async () => {
     const { data } = await supabase.from("plans").select("*").eq("id", planId).single();
@@ -233,6 +237,53 @@ export default function PlanEditor({ planId, mode }) {
     loadGeometry();
   }
 
+  async function handleUpdatePlanFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const confirmed = window.confirm(
+      "Update this plan's file? Existing signs and dots stay in place, but their positions are set relative to the image — if the new file has a different layout or orientation, they may no longer line up correctly. Continue?"
+    );
+    if (!confirmed) {
+      e.target.value = "";
+      return;
+    }
+
+    setPlanFileUpdating(true);
+    setPlanFileError(null);
+    try {
+      let uploadBlob = file;
+      let fileExt = file.name.split(".").pop().toLowerCase();
+      let contentType = file.type;
+
+      if (file.type === "application/pdf" || fileExt === "pdf") {
+        uploadBlob = await renderPdfFirstPageToBlob(file, 2.5);
+        fileExt = "png";
+        contentType = "image/png";
+      } else {
+        uploadBlob = await normalizeImageToPngBlob(file);
+        fileExt = "png";
+        contentType = "image/png";
+      }
+
+      const filePath = `${crypto.randomUUID()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("plans")
+        .upload(filePath, uploadBlob, { contentType });
+      if (uploadError) throw uploadError;
+
+      const { error: updateError } = await supabase.from("plans").update({ file_path: filePath }).eq("id", planId);
+      if (updateError) throw updateError;
+
+      await loadPlan();
+    } catch (err) {
+      setPlanFileError(err.message);
+    } finally {
+      setPlanFileUpdating(false);
+      e.target.value = "";
+    }
+  }
+
   async function handleDownloadPlanPdf() {
     setPdfError(null);
     setPdfBusy("plan");
@@ -374,17 +425,37 @@ export default function PlanEditor({ planId, mode }) {
       </p>
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-6">
-        <PlanCanvas
-          imageUrl={imageUrl}
-          decisionPoints={visiblePoints}
-          selectedId={selectedId}
-          addMode={addMode}
-          signTypesById={isDotsMode ? {} : Object.fromEntries(signTypes.map((st) => [st.id, st]))}
-          previewRotation={selectedId ? dpForm.rotation : null}
-          onCanvasClick={handleCanvasClick}
-          onSelectDecisionPoint={setSelectedId}
-          onMoveDecisionPoint={handleMoveDecisionPoint}
-        />
+        <div>
+          <PlanCanvas
+            imageUrl={imageUrl}
+            decisionPoints={visiblePoints}
+            selectedId={selectedId}
+            addMode={addMode}
+            signTypesById={isDotsMode ? {} : Object.fromEntries(signTypes.map((st) => [st.id, st]))}
+            previewRotation={selectedId ? dpForm.rotation : null}
+            onCanvasClick={handleCanvasClick}
+            onSelectDecisionPoint={setSelectedId}
+            onMoveDecisionPoint={handleMoveDecisionPoint}
+          />
+
+          <div className="mt-2 flex items-center gap-3">
+            <label
+              className={`text-sm text-ink/50 hover:text-ink ${
+                planFileUpdating ? "cursor-wait" : "cursor-pointer"
+              }`}
+            >
+              {planFileUpdating ? "Updating plan..." : "Update Plan"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,application/pdf"
+                onChange={handleUpdatePlanFile}
+                disabled={planFileUpdating}
+                className="hidden"
+              />
+            </label>
+            {planFileError && <span className="text-xs text-red-600">Update failed: {planFileError}</span>}
+          </div>
+        </div>
 
         <div className="space-y-4">
           {!selectedPoint && (

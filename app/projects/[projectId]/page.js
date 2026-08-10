@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { renderPdfFirstPageToBlob } from "@/lib/pdfToImage";
-import { normalizeImageToPngBlob } from "@/lib/normalizeImage";
 
 function PencilIcon(props) {
   return (
@@ -33,8 +31,6 @@ export default function ProjectPage({ params }) {
   const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
-  const [replacingId, setReplacingId] = useState(null);
-  const [replaceError, setReplaceError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,56 +74,6 @@ export default function ProjectPage({ params }) {
     load();
   }
 
-  async function handleReplaceFile(e, plan) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const confirmed = window.confirm(
-      "Replace this plan's file? Existing signs and dots stay in place, but their positions are set relative to the image — if the new file has a different layout or orientation, they may no longer line up correctly. Continue?"
-    );
-    if (!confirmed) {
-      e.target.value = "";
-      return;
-    }
-
-    setReplacingId(plan.id);
-    setReplaceError(null);
-    try {
-      let uploadBlob = file;
-      let fileExt = file.name.split(".").pop().toLowerCase();
-      let contentType = file.type;
-
-      if (file.type === "application/pdf" || fileExt === "pdf") {
-        uploadBlob = await renderPdfFirstPageToBlob(file, 2.5);
-        fileExt = "png";
-        contentType = "image/png";
-      } else {
-        uploadBlob = await normalizeImageToPngBlob(file);
-        fileExt = "png";
-        contentType = "image/png";
-      }
-
-      const filePath = `${crypto.randomUUID()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("plans")
-        .upload(filePath, uploadBlob, { contentType });
-      if (uploadError) throw uploadError;
-
-      const { error: updateError } = await supabase
-        .from("plans")
-        .update({ file_path: filePath })
-        .eq("id", plan.id);
-      if (updateError) throw updateError;
-
-      load();
-    } catch (err) {
-      setReplaceError(`${plan.name}: ${err.message}`);
-    } finally {
-      setReplacingId(null);
-      e.target.value = "";
-    }
-  }
-
   return (
     <div>
       <a href="/" className="text-sm text-accent hover:underline">← All projects</a>
@@ -150,12 +96,6 @@ export default function ProjectPage({ params }) {
         <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
           No plans in this project yet. Upload one to get started.
         </div>
-      )}
-
-      {replaceError && (
-        <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-3 text-sm mb-4">
-          Replace failed — {replaceError}
-        </p>
       )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -220,16 +160,6 @@ export default function ProjectPage({ params }) {
                     View schedule
                   </a>
                 </div>
-                <label className="inline-block mt-2 text-xs text-ink/50 hover:text-ink cursor-pointer">
-                  {replacingId === plan.id ? "Replacing..." : "Replace file"}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,application/pdf"
-                    onChange={(e) => handleReplaceFile(e, plan)}
-                    disabled={replacingId !== null}
-                    className="hidden"
-                  />
-                </label>
               </>
             )}
           </div>
