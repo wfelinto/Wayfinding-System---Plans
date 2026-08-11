@@ -134,8 +134,21 @@ export default function ProjectPage({ params }) {
             onClick={() => downloadGlossaryTemplate(project?.name)}
             className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
           >
-            Download template
+            Download Glossary Template
           </button>
+          <span className="w-px bg-black/10 mx-1 self-stretch" />
+          <a
+            href={`/projects/${projectId}/kop`}
+            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
+          >
+            Sign types (KOP)
+          </a>
+          <a
+            href={`/projects/${projectId}/pictograms`}
+            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
+          >
+            Pictograms
+          </a>
         </div>
       </div>
 

@@ -75,34 +75,42 @@ export default function PlanEditor({ planId, mode }) {
   }, [planId]);
 
   const loadGeometry = useCallback(async () => {
-    if (isDotsMode) {
-      const dp = await supabase
-        .from("decision_points")
-        .select("*")
-        .eq("plan_id", planId)
-        .order("sequence_order");
-      setDecisionPoints(dp.data || []);
-    } else {
-      const [dp, st, pic] = await Promise.all([
-        supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
-        supabase.from("sign_types").select("*").order("name"),
-        supabase.from("pictograms").select("*").order("name"),
-      ]);
-      setDecisionPoints(dp.data || []);
-      setSignTypes(st.data || []);
-      setPictograms(
-        (pic.data || []).map((p) => ({
-          ...p,
-          imageUrl: supabase.storage.from("pictograms").getPublicUrl(p.image_path).data.publicUrl,
-        }))
-      );
-    }
-  }, [planId, isDotsMode]);
+    const dp = await supabase
+      .from("decision_points")
+      .select("*")
+      .eq("plan_id", planId)
+      .order("sequence_order");
+    setDecisionPoints(dp.data || []);
+  }, [planId]);
 
   useEffect(() => {
     loadPlan();
     loadGeometry();
   }, [loadPlan, loadGeometry]);
+
+  const loadKit = useCallback(async (projectId) => {
+    if (!projectId) return;
+    // Project-scoped entries, plus any legacy entries created before the
+    // KOP/pictogram library became per-project (those have no
+    // project_id and stay visible in every project).
+    const [st, pic] = await Promise.all([
+      supabase.from("sign_types").select("*").or(`project_id.eq.${projectId},project_id.is.null`).order("name"),
+      supabase.from("pictograms").select("*").or(`project_id.eq.${projectId},project_id.is.null`).order("name"),
+    ]);
+    setSignTypes(st.data || []);
+    setPictograms(
+      (pic.data || []).map((p) => ({
+        ...p,
+        imageUrl: supabase.storage.from("pictograms").getPublicUrl(p.image_path).data.publicUrl,
+      }))
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isDotsMode && plan?.project_id) {
+      loadKit(plan.project_id);
+    }
+  }, [isDotsMode, plan?.project_id, loadKit]);
 
   const loadGlossary = useCallback(async (projectId) => {
     if (!projectId) return;
@@ -750,7 +758,7 @@ export default function PlanEditor({ planId, mode }) {
                         automatically. Click "ES/FR/PT" on a linked message to add translations, which
                         update everywhere that term is used.{" "}
                         Manage pictograms on the{" "}
-                        <a href="/pictograms" className="underline">Pictograms page</a>.
+                        <a href={`/projects/${plan.project_id}/pictograms`} className="underline">Pictograms page</a>.
                       </p>
                     )}
                   </div>
@@ -789,7 +797,7 @@ export default function PlanEditor({ planId, mode }) {
                 </select>
                 {signTypes.length === 0 && (
                   <p className="text-xs text-amber-700 mt-1">
-                    No sign types yet — add some on the <a href="/kop" className="underline">KOP page</a>.
+                    No sign types yet — add some on the <a href={`/projects/${plan.project_id}/kop`} className="underline">KOP page</a>.
                   </p>
                 )}
               </div>

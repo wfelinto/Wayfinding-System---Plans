@@ -31,13 +31,21 @@ export default function SchedulePage({ params }) {
   const run = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: planData }, { data: points }, { data: signTypes }, { data: pictograms }] = await Promise.all([
-      supabase.from("plans").select("*").eq("id", planId).single(),
-      supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
-      supabase.from("sign_types").select("*"),
-      supabase.from("pictograms").select("*"),
-    ]);
+    const { data: planData } = await supabase.from("plans").select("*").eq("id", planId).single();
     setPlan(planData);
+    const projectId = planData?.project_id;
+
+    const [{ data: points }, { data: signTypes }, { data: pictograms }] = await Promise.all([
+      supabase.from("decision_points").select("*").eq("plan_id", planId).order("sequence_order"),
+      // Project-scoped entries, plus any legacy entries from before the
+      // KOP/pictogram library became per-project.
+      projectId
+        ? supabase.from("sign_types").select("*").or(`project_id.eq.${projectId},project_id.is.null`)
+        : supabase.from("sign_types").select("*").is("project_id", null),
+      projectId
+        ? supabase.from("pictograms").select("*").or(`project_id.eq.${projectId},project_id.is.null`)
+        : supabase.from("pictograms").select("*").is("project_id", null),
+    ]);
 
     const signTypesById = Object.fromEntries((signTypes || []).map((st) => [st.id, st]));
     const pictogramsById = Object.fromEntries((pictograms || []).map((p) => [p.id, p]));
