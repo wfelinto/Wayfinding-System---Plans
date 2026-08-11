@@ -73,11 +73,8 @@ export default function ProjectsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Projects</h1>
-          <p className="text-ink/60 mt-1">Each project can hold several plans — floors, buildings, or phases.</p>
-        </div>
+      <div className="flex items-center gap-4 mb-1">
+        <h1 className="text-2xl font-semibold text-ink">Projects</h1>
         <a
           href="/projects/new"
           className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
@@ -85,6 +82,7 @@ export default function ProjectsPage() {
           New project
         </a>
       </div>
+      <p className="text-ink/60 mb-6">Each project can hold several plans — floors, buildings, or phases.</p>
 
       {loading && <p className="text-ink/50">Loading projects...</p>}
       {error && (

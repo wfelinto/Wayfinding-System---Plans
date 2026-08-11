@@ -21,10 +21,10 @@ const ZOOM_STEP = 25;
 export default function PlanCanvas({
   imageUrl,
   decisionPoints,
-  selectedId,
+  selectedIds,
   addMode,
   signTypesById,
-  previewRotation,
+  previewRotationById,
   onCanvasClick,
   onSelectDecisionPoint,
   onMoveDecisionPoint,
@@ -83,13 +83,13 @@ export default function PlanCanvas({
       }
     }
 
-    function handlePointerUp() {
+    function handlePointerUp(upEvent) {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       if (moved) {
         onMoveDecisionPoint(point.id, lastPos.x, lastPos.y);
       } else {
-        onSelectDecisionPoint(point.id);
+        onSelectDecisionPoint(point.id, upEvent);
       }
     }
 
@@ -155,7 +155,8 @@ export default function PlanCanvas({
 
           {decisionPoints.map((p) => {
             const design = p.point_type === "dot" ? null : signTypesById?.[p.sign_type_id]?.sign_design;
-            const rotation = p.id === selectedId && previewRotation != null ? previewRotation : p.rotation || 0;
+            const isSelected = selectedIds?.includes(p.id);
+            const rotation = isSelected && previewRotationById?.[p.id] != null ? previewRotationById[p.id] : p.rotation || 0;
             return (
               <div
                 key={p.id}
@@ -166,7 +167,7 @@ export default function PlanCanvas({
                 <button
                   onPointerDown={(e) => handlePinPointerDown(e, p)}
                   className={`touch-none flex items-center justify-center rounded-full ${
-                    selectedId === p.id ? "ring-2 ring-amber-500 bg-amber-50/70" : ""
+                    isSelected ? "ring-2 ring-amber-500 bg-amber-50/70" : ""
                   }`}
                   style={{ transform: `rotate(${rotation}deg)` }}
                   title={p.sign_code || "Sign"}
