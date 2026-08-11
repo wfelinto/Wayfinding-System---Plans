@@ -39,6 +39,8 @@ export default function PlanEditor({ planId, mode }) {
   const [decisionPoints, setDecisionPoints] = useState([]);
   const [signTypes, setSignTypes] = useState([]);
   const [pictograms, setPictograms] = useState([]);
+  const [glossaryTerms, setGlossaryTerms] = useState([]);
+  const [expandedTranslations, setExpandedTranslations] = useState({});
 
   const [addMode, setAddMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -101,6 +103,22 @@ export default function PlanEditor({ planId, mode }) {
     loadPlan();
     loadGeometry();
   }, [loadPlan, loadGeometry]);
+
+  const loadGlossary = useCallback(async (projectId) => {
+    if (!projectId) return;
+    const { data } = await supabase
+      .from("glossary_terms")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("external_id");
+    setGlossaryTerms(data || []);
+  }, []);
+
+  useEffect(() => {
+    if (!isDotsMode && plan?.project_id) {
+      loadGlossary(plan.project_id);
+    }
+  }, [isDotsMode, plan?.project_id, loadGlossary]);
 
   useEffect(() => {
     setDpSaveError(null);
@@ -165,6 +183,56 @@ export default function PlanEditor({ planId, mode }) {
       );
       return { ...prev, message_slots: { ...prev.message_slots, [side]: sideSlots } };
     });
+  }
+
+  // Called when a message text field loses focus: links it to a matching
+  // glossary term if one exists (case-insensitive), or — per the "add a
+  // term manually" requirement — creates a brand-new glossary entry on
+  // the spot so it's immediately available in every other sign's dropdown.
+  async function resolveGlossaryLink(side, index) {
+    if (isDotsMode || !plan?.project_id) return;
+    const slot = dpForm.message_slots[side][index];
+    const text = (slot.text || "").trim();
+
+    if (!text) {
+      if (slot.glossary_id) updateMessageSlot(side, index, "glossary_id", "");
+      return;
+    }
+
+    const match = glossaryTerms.find((t) => t.term_en.trim().toLowerCase() === text.toLowerCase());
+    if (match) {
+      if (slot.glossary_id !== match.id) updateMessageSlot(side, index, "glossary_id", match.id);
+      return;
+    }
+
+    // Already linked to a term whose text matches what's here — nothing to do.
+    if (slot.glossary_id) {
+      const linked = glossaryTerms.find((t) => t.id === slot.glossary_id);
+      if (linked && linked.term_en.trim().toLowerCase() === text.toLowerCase()) return;
+    }
+
+    const nextExternalId = glossaryTerms.reduce((max, t) => Math.max(max, t.external_id || 0), 0) + 1;
+    const { data, error } = await supabase
+      .from("glossary_terms")
+      .insert({ project_id: plan.project_id, external_id: nextExternalId, term_en: text })
+      .select()
+      .single();
+    if (!error && data) {
+      setGlossaryTerms((prev) => [...prev, data]);
+      updateMessageSlot(side, index, "glossary_id", data.id);
+    }
+  }
+
+  // Editing a translation edits the glossary term itself, so the change
+  // propagates to every sign using that same term — same philosophy as
+  // updating the English text via a fresh glossary upload.
+  async function updateGlossaryTranslation(glossaryId, field, value) {
+    setGlossaryTerms((prev) => prev.map((t) => (t.id === glossaryId ? { ...t, [field]: value } : t)));
+    await supabase.from("glossary_terms").update({ [field]: value || null }).eq("id", glossaryId);
+  }
+
+  function toggleTranslations(key) {
+    setExpandedTranslations((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   async function saveDecisionPointDetails(e) {
@@ -303,7 +371,8 @@ export default function PlanEditor({ planId, mode }) {
     try {
       const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
       const pictogramsById = Object.fromEntries(pictograms.map((p) => [p.id, p]));
-      await downloadMessageSchedulePdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById);
+      const glossaryTermsById = Object.fromEntries(glossaryTerms.map((t) => [t.id, t]));
+      await downloadMessageSchedulePdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById, glossaryTermsById);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -386,7 +455,7 @@ export default function PlanEditor({ planId, mode }) {
                   addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
                 }`}
               >
-                Add Sign Type
+                Add Sign
               </button>
               <button
                 onClick={clearAllSigns}
@@ -463,7 +532,7 @@ export default function PlanEditor({ planId, mode }) {
               {addMode
                 ? `Click the plan to place a new ${isDotsMode ? "dot" : "sign"}.`
                 : `Select a pin to view and edit its details, or click "${
-                    isDotsMode ? "Add Dot Location" : "Add Sign Type"
+                    isDotsMode ? "Add Dot Location" : "Add Sign"
                   }" to place a new one.`}
             </div>
           )}
@@ -597,38 +666,90 @@ export default function PlanEditor({ planId, mode }) {
                       Messages - Side {side}
                     </label>
                     <div className="space-y-1.5">
-                      {dpForm.message_slots[side].map((slot, i) => (
-                        <div key={i} className="flex gap-1.5">
-                          <input
-                            value={slot.text}
-                            onChange={(e) => updateMessageSlot(side, i, "text", e.target.value)}
-                            placeholder={`Message ${i + 1}`}
-                            className="flex-1 min-w-0 border border-black/15 rounded-md px-2 py-1 text-xs"
-                          />
-                          <select
-                            value={slot.arrow}
-                            onChange={(e) => updateMessageSlot(side, i, "arrow", e.target.value)}
-                            className="w-20 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
-                          >
-                            {ARROW_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <PictogramPicker
-                            pictograms={pictograms}
-                            value={slot.pictogram_id}
-                            onChange={(id) => updateMessageSlot(side, i, "pictogram_id", id)}
-                          />
-                        </div>
-                      ))}
+                      {dpForm.message_slots[side].map((slot, i) => {
+                        const rowKey = `${side}-${i}`;
+                        const linkedTerm = slot.glossary_id
+                          ? glossaryTerms.find((t) => t.id === slot.glossary_id)
+                          : null;
+                        return (
+                          <div key={i}>
+                            <div className="flex gap-1.5">
+                              <input
+                                list={`glossary-${side}-${i}`}
+                                value={slot.text}
+                                onChange={(e) => updateMessageSlot(side, i, "text", e.target.value)}
+                                onBlur={() => resolveGlossaryLink(side, i)}
+                                placeholder={`Message ${i + 1}`}
+                                className="flex-1 min-w-0 border border-black/15 rounded-md px-2 py-1 text-xs"
+                              />
+                              <datalist id={`glossary-${side}-${i}`}>
+                                {glossaryTerms.map((t) => (
+                                  <option key={t.id} value={t.term_en} />
+                                ))}
+                              </datalist>
+                              <select
+                                value={slot.arrow}
+                                onChange={(e) => updateMessageSlot(side, i, "arrow", e.target.value)}
+                                className="w-20 shrink-0 border border-black/15 rounded-md px-1 py-1 text-xs bg-white"
+                              >
+                                {ARROW_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <PictogramPicker
+                                pictograms={pictograms}
+                                value={slot.pictogram_id}
+                                onChange={(id) => updateMessageSlot(side, i, "pictogram_id", id)}
+                              />
+                              {linkedTerm && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTranslations(rowKey)}
+                                  title="Translations"
+                                  className={`text-[10px] px-1.5 rounded border shrink-0 ${
+                                    expandedTranslations[rowKey]
+                                      ? "bg-accent text-white border-accent"
+                                      : "border-black/15 text-ink/50 hover:text-ink"
+                                  }`}
+                                >
+                                  ES/FR/PT
+                                </button>
+                              )}
+                            </div>
+                            {linkedTerm && expandedTranslations[rowKey] && (
+                              <div className="grid grid-cols-3 gap-1.5 mt-1 pl-1">
+                                <input
+                                  value={linkedTerm.term_es || ""}
+                                  onChange={(e) => updateGlossaryTranslation(linkedTerm.id, "term_es", e.target.value)}
+                                  placeholder="ES"
+                                  className="border border-black/15 rounded-md px-2 py-1 text-[11px]"
+                                />
+                                <input
+                                  value={linkedTerm.term_fr || ""}
+                                  onChange={(e) => updateGlossaryTranslation(linkedTerm.id, "term_fr", e.target.value)}
+                                  placeholder="FR"
+                                  className="border border-black/15 rounded-md px-2 py-1 text-[11px]"
+                                />
+                                <input
+                                  value={linkedTerm.term_pt || ""}
+                                  onChange={(e) => updateGlossaryTranslation(linkedTerm.id, "term_pt", e.target.value)}
+                                  placeholder="PT"
+                                  className="border border-black/15 rounded-md px-2 py-1 text-[11px]"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     {side === activeSides[activeSides.length - 1] && (
                       <p className="text-xs text-ink/40 mt-1">
-                        Each side's ten messages form one Messages cell in the export, each with its arrow
-                        and pictogram. The number of sides shown here follows the selected sign type's
-                        design. Manage the pictogram library on the{" "}
+                        Type to search the glossary, or type a new term — it's added to the glossary
+                        automatically. Click "ES/FR/PT" on a linked message to add translations, which
+                        update everywhere that term is used.{" "}
+                        Manage pictograms on the{" "}
                         <a href="/pictograms" className="underline">Pictograms page</a>.
                       </p>
                     )}

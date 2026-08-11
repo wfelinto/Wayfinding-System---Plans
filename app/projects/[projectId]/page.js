@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { downloadGlossaryTemplate, parseGlossaryExcel } from "@/lib/glossaryExcel";
 
 function PencilIcon(props) {
   return (
@@ -31,6 +32,8 @@ export default function ProjectPage({ params }) {
   const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [glossaryUploading, setGlossaryUploading] = useState(false);
+  const [glossaryMessage, setGlossaryMessage] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,18 +77,79 @@ export default function ProjectPage({ params }) {
     load();
   }
 
+  async function handleUploadGlossary(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGlossaryUploading(true);
+    setGlossaryMessage(null);
+    try {
+      const terms = await parseGlossaryExcel(file);
+      if (terms.length === 0) {
+        throw new Error("No valid rows found — make sure the sheet has ID and English columns filled in.");
+      }
+      const rows = terms.map((t) => ({ ...t, project_id: projectId }));
+      const { error } = await supabase
+        .from("glossary_terms")
+        .upsert(rows, { onConflict: "project_id,external_id" });
+      if (error) throw error;
+      setGlossaryMessage({
+        type: "success",
+        text: `Glossary updated — ${terms.length} term${terms.length === 1 ? "" : "s"} processed. Terms matching an existing ID were updated everywhere they're used; new IDs were added as new terms.`,
+      });
+    } catch (err) {
+      setGlossaryMessage({ type: "error", text: err.message });
+    } finally {
+      setGlossaryUploading(false);
+      e.target.value = "";
+    }
+  }
+
   return (
     <div>
       <a href="/" className="text-sm text-accent hover:underline">← All projects</a>
-      <div className="flex items-center justify-between mt-2 mb-6">
+      <div className="flex items-center justify-between mt-2 mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-semibold text-ink">{project ? project.name : "Loading..."}</h1>
-        <a
-          href={`/projects/${projectId}/plans/new`}
-          className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
-        >
-          Upload plan
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/projects/${projectId}/plans/new`}
+            className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+          >
+            Upload plan
+          </a>
+          <label
+            className={`bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 ${
+              glossaryUploading ? "cursor-wait opacity-70" : "cursor-pointer"
+            }`}
+          >
+            {glossaryUploading ? "Uploading..." : "Upload glossary"}
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleUploadGlossary}
+              disabled={glossaryUploading}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => downloadGlossaryTemplate(project?.name)}
+            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
+          >
+            Download template
+          </button>
+        </div>
       </div>
+
+      {glossaryMessage && (
+        <p
+          className={`text-sm rounded-md p-3 mb-4 border ${
+            glossaryMessage.type === "error"
+              ? "text-red-700 bg-red-50 border-red-200"
+              : "text-emerald-700 bg-emerald-50 border-emerald-200"
+          }`}
+        >
+          {glossaryMessage.text}
+        </p>
+      )}
 
       {loading && <p className="text-ink/50">Loading plans...</p>}
       {error && (
