@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlanCanvas from "@/components/PlanCanvas";
-import { downloadPlanPdf, downloadMessageSchedulePdf, downloadDotPlanReportPdf } from "@/lib/pdfExport";
+import { downloadDotPlanPdf, downloadMessageSchedulePdf } from "@/lib/pdfExport";
 import { normalizeMessageSlots, sidesForDesign } from "@/lib/crosscheck";
 import { ARROW_OPTIONS } from "@/lib/arrows";
 import PictogramPicker from "@/components/PictogramPicker";
@@ -360,12 +360,12 @@ export default function PlanEditor({ planId, mode }) {
     }
   }
 
-  async function handleDownloadPlanPdf() {
+  async function handleDownloadDotPlanPdf() {
     setPdfError(null);
-    setPdfBusy("plan");
+    setPdfBusy("dotplan");
     try {
       const signTypesById = Object.fromEntries(signTypes.map((st) => [st.id, st]));
-      await downloadPlanPdf(plan, imageUrl, decisionPoints, signTypesById);
+      await downloadDotPlanPdf(plan, imageUrl, decisionPoints, signTypesById);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -381,18 +381,6 @@ export default function PlanEditor({ planId, mode }) {
       const pictogramsById = Object.fromEntries(pictograms.map((p) => [p.id, p]));
       const glossaryTermsById = Object.fromEntries(glossaryTerms.map((t) => [t.id, t]));
       await downloadMessageSchedulePdf(plan, imageUrl, decisionPoints, signTypesById, pictogramsById, glossaryTermsById);
-    } catch (err) {
-      setPdfError(err.message);
-    } finally {
-      setPdfBusy(null);
-    }
-  }
-
-  async function handleDownloadDotPlanReport() {
-    setPdfError(null);
-    setPdfBusy("dots");
-    try {
-      await downloadDotPlanReportPdf(plan, imageUrl, decisionPoints);
     } catch (err) {
       setPdfError(err.message);
     } finally {
@@ -417,77 +405,42 @@ export default function PlanEditor({ planId, mode }) {
           <a href={`/projects/${plan.project_id}`} className="text-sm text-accent hover:underline">
             ← Back to project
           </a>
-          <h1 className="text-2xl font-semibold text-ink mt-1">
-            {plan.name} — {isDotsMode ? "Dot Plan Editor" : "Message Schedule Editor"}
-          </h1>
-          <div className="flex gap-4">
-            {!isDotsMode && (
-              <a href={`/schedule/${planId}`} className="text-sm text-accent hover:underline">
-                View sign schedule →
-              </a>
-            )}
-            <a
-              href={isDotsMode ? `/editor/${planId}` : `/editor/${planId}/dots`}
-              className="text-sm text-ink/50 hover:text-ink hover:underline"
-            >
-              {isDotsMode ? "Switch to Message Schedule Editor →" : "Switch to Dot Plan Editor →"}
-            </a>
-          </div>
+          <h1 className="text-2xl font-semibold text-ink mt-1">{plan.name} — Message Schedule Editor</h1>
+          <a href={`/schedule/${planId}`} className="text-sm text-accent hover:underline">
+            View sign schedule →
+          </a>
         </div>
 
         <div className="flex flex-wrap gap-2 items-start">
-          {isDotsMode ? (
-            <>
-              <button
-                onClick={() => setAddMode((v) => !v)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-                  addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
-                }`}
-              >
-                Add Dot Location
-              </button>
-              <span className="w-px bg-black/10 mx-1 self-stretch" />
-              <button
-                onClick={handleDownloadDotPlanReport}
-                disabled={pdfBusy !== null}
-                className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
-              >
-                {pdfBusy === "dots" ? "Preparing..." : "Download Dot Plan Report PDF"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setAddMode((v) => !v)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-                  addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
-                }`}
-              >
-                Add Sign
-              </button>
-              <button
-                onClick={clearAllSigns}
-                className="px-3 py-1.5 rounded-md text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
-              >
-                Clear all
-              </button>
-              <span className="w-px bg-black/10 mx-1 self-stretch" />
-              <button
-                onClick={handleDownloadPlanPdf}
-                disabled={pdfBusy !== null}
-                className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
-              >
-                {pdfBusy === "plan" ? "Preparing..." : "Download plan PDF"}
-              </button>
-              <button
-                onClick={handleDownloadMessageSchedule}
-                disabled={pdfBusy !== null}
-                className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
-              >
-                {pdfBusy === "schedule" ? "Preparing..." : "Download Message Schedule PDF"}
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => setAddMode((v) => !v)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
+              addMode ? "bg-accent text-white border-accent" : "border-black/15 text-ink/70"
+            }`}
+          >
+            Add Sign
+          </button>
+          <button
+            onClick={clearAllSigns}
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
+          >
+            Clear all
+          </button>
+          <span className="w-px bg-black/10 mx-1 self-stretch" />
+          <button
+            onClick={handleDownloadDotPlanPdf}
+            disabled={pdfBusy !== null}
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
+          >
+            {pdfBusy === "dotplan" ? "Preparing..." : "Download Dot Plan PDF"}
+          </button>
+          <button
+            onClick={handleDownloadMessageSchedule}
+            disabled={pdfBusy !== null}
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 disabled:opacity-50"
+          >
+            {pdfBusy === "schedule" ? "Preparing..." : "Download Message Schedule PDF"}
+          </button>
         </div>
       </div>
 
@@ -496,8 +449,7 @@ export default function PlanEditor({ planId, mode }) {
       )}
 
       <p className="text-sm text-ink/50 mb-3">
-        {addMode && isDotsMode && "Click the plan to place a new dot location. Click an existing pin to select it instead."}
-        {addMode && !isDotsMode && "Click the plan to place a new sign. Click an existing pin to select it instead."}
+        {addMode && "Click the plan to place a new sign. Click an existing pin to select it instead."}
         {!addMode && "Drag a pin to move it, or click one to view and edit its details."}
       </p>
 
@@ -633,6 +585,21 @@ export default function PlanEditor({ planId, mode }) {
                 >
                   Delete this sign
                 </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-ink/70 mb-1 flex items-center justify-between">
+                  <span>Marker rotation</span>
+                  <span className="text-ink/40 font-normal">{dpForm.rotation}°</span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="359"
+                  value={dpForm.rotation}
+                  onChange={(e) => setDpForm({ ...dpForm, rotation: Number(e.target.value) })}
+                  className="w-full"
+                />
               </div>
 
               <div>
@@ -800,21 +767,6 @@ export default function PlanEditor({ planId, mode }) {
                     No sign types yet — add some on the <a href={`/projects/${plan.project_id}/kop`} className="underline">KOP page</a>.
                   </p>
                 )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1 flex items-center justify-between">
-                  <span>Marker rotation</span>
-                  <span className="text-ink/40 font-normal">{dpForm.rotation}°</span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="359"
-                  value={dpForm.rotation}
-                  onChange={(e) => setDpForm({ ...dpForm, rotation: Number(e.target.value) })}
-                  className="w-full"
-                />
               </div>
 
               <div>

@@ -55,7 +55,7 @@ export default function AuthGuard({ children }) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-black/10 bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
           <a href="/" className="font-semibold text-lg tracking-tight text-ink">
             Wayfinding Scoping Tool
           </a>
@@ -69,7 +69,7 @@ export default function AuthGuard({ children }) {
           </nav>
         </div>
       </header>
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">{children}</main>
+      <main className="flex-1 max-w-[1800px] w-full mx-auto px-6 py-8">{children}</main>
     </div>
   );
 }
