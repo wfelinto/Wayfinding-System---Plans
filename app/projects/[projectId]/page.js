@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { downloadGlossaryTemplate, parseGlossaryExcel } from "@/lib/glossaryExcel";
+import { downloadGlossaryTemplate, downloadGlossaryExport, parseGlossaryExcel } from "@/lib/glossaryExcel";
 
 function PencilIcon(props) {
   return (
@@ -33,6 +33,7 @@ export default function ProjectPage({ params }) {
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
   const [glossaryUploading, setGlossaryUploading] = useState(false);
+  const [glossaryDownloading, setGlossaryDownloading] = useState(false);
   const [glossaryMessage, setGlossaryMessage] = useState(null);
 
   const load = useCallback(async () => {
@@ -104,6 +105,31 @@ export default function ProjectPage({ params }) {
     }
   }
 
+  async function handleDownloadCurrentGlossary() {
+    setGlossaryDownloading(true);
+    setGlossaryMessage(null);
+    try {
+      const { data, error } = await supabase
+        .from("glossary_terms")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("external_id");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        setGlossaryMessage({
+          type: "error",
+          text: "This project's glossary is empty — nothing to download yet.",
+        });
+        return;
+      }
+      downloadGlossaryExport(data, project?.name);
+    } catch (err) {
+      setGlossaryMessage({ type: "error", text: err.message });
+    } finally {
+      setGlossaryDownloading(false);
+    }
+  }
+
   return (
     <div>
       <a href="/" className="text-sm text-accent hover:underline">← All projects</a>
@@ -135,6 +161,13 @@ export default function ProjectPage({ params }) {
             className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
           >
             Download Glossary Template
+          </button>
+          <button
+            onClick={handleDownloadCurrentGlossary}
+            disabled={glossaryDownloading}
+            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5 disabled:opacity-50"
+          >
+            {glossaryDownloading ? "Preparing..." : "Download Current Glossary"}
           </button>
           <span className="w-px bg-black/10 mx-1 self-stretch" />
           <a
