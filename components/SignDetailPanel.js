@@ -70,6 +70,36 @@ export default function SignDetailPanel({
       </div>
 
       <div>
+        <label className="block text-xs font-medium text-ink/70 mb-1">
+          Sign type <span className="text-red-500">*</span>
+        </label>
+        <select
+          required
+          value={form.sign_type_id}
+          onChange={(e) => onFieldChange("sign_type_id", e.target.value)}
+          className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+        >
+          <option value="" disabled>
+            Select a sign type…
+          </option>
+          {signTypes.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.name}
+            </option>
+          ))}
+        </select>
+        {signTypes.length === 0 && (
+          <p className="text-xs text-amber-700 mt-1">
+            No sign types yet — add some on the{" "}
+            <a href={`/projects/${plan.project_id}/kop`} className="underline">
+              KOP page
+            </a>
+            .
+          </p>
+        )}
+      </div>
+
+      <div>
         <label className="block text-xs font-medium text-ink/70 mb-1 flex items-center justify-between">
           <span>Marker rotation</span>
           <span className="text-ink/40 font-normal">{form.rotation}°</span>
@@ -218,36 +248,6 @@ export default function SignDetailPanel({
           placeholder="Any notes for this sign"
           className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
         />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-ink/70 mb-1">
-          Sign type <span className="text-red-500">*</span>
-        </label>
-        <select
-          required
-          value={form.sign_type_id}
-          onChange={(e) => onFieldChange("sign_type_id", e.target.value)}
-          className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
-        >
-          <option value="" disabled>
-            Select a sign type…
-          </option>
-          {signTypes.map((st) => (
-            <option key={st.id} value={st.id}>
-              {st.name}
-            </option>
-          ))}
-        </select>
-        {signTypes.length === 0 && (
-          <p className="text-xs text-amber-700 mt-1">
-            No sign types yet — add some on the{" "}
-            <a href={`/projects/${plan.project_id}/kop`} className="underline">
-              KOP page
-            </a>
-            .
-          </p>
-        )}
       </div>
 
       <div>
