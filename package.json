@@ -2,11 +2,16 @@
   "name": "wayfinding-scoping-tool",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/copy-standalone-assets.js",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron:start": "electron .",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -19,7 +24,32 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13"
+  },
+  "build": {
+    "appId": "com.wayfinding.scopingtool",
+    "productName": "Wayfinding Scoping Tool",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "standalone"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    }
   }
 }
