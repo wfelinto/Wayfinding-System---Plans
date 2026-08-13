@@ -38,6 +38,17 @@ export default function AuthGuard({ children }) {
     }
   }, [checked, session, pathname, router]);
 
+  // Silently ensures every signed-in user has a profiles row (role +
+  // FA Signage approval), auto-bootstrapping the very first user as
+  // admin. Runs once per session, fire-and-forget.
+  useEffect(() => {
+    if (!session) return;
+    fetch("/api/admin/ensure-profile", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).catch(() => {});
+  }, [session]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -61,6 +72,7 @@ export default function AuthGuard({ children }) {
           </a>
           <nav className="flex items-center gap-6 text-sm text-ink/70">
             <a href="/" className="hover:text-ink">Projects</a>
+            <a href="/users" className="hover:text-ink">Users</a>
             <span className="text-ink/30">|</span>
             <span className="text-ink/50 hidden sm:inline">{session.user.email}</span>
             <button onClick={handleLogout} className="hover:text-ink">

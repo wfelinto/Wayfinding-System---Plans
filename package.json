@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "node scripts/copy-standalone-assets.js",
+    "postbuild": "node scripts/copy-standalone-assets.js || echo \"Skipping standalone asset copy (only needed for local Electron builds)\"",
     "start": "next start",
     "lint": "next lint",
     "electron:start": "electron .",

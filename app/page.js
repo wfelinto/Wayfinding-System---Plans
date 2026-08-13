@@ -23,12 +23,90 @@ function TrashIcon(props) {
   );
 }
 
-export default function ProjectsPage() {
-  const [projects, setProjects] = useState([]);
+/** A renamable, deletable project card, reused for both Wayfinding and FA Signage projects. */
+function ProjectCard({ project, hrefBase, table, deleteWarning, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(project.name);
+
+  function cancelEdit() {
+    setEditing(false);
+    setName(project.name);
+  }
+
+  async function saveEdit() {
+    if (!name.trim()) return;
+    await supabase.from(table).update({ name: name.trim() }).eq("id", project.id);
+    setEditing(false);
+    onChanged();
+  }
+
+  async function handleDelete() {
+    const confirmed = window.confirm(`Delete "${project.name}"? ${deleteWarning} This can't be undone.`);
+    if (!confirmed) return;
+    await supabase.from(table).delete().eq("id", project.id);
+    onChanged();
+  }
+
+  return (
+    <div className="bg-white border border-black/10 rounded-lg p-4 hover:border-accent/50">
+      {editing ? (
+        <div className="space-y-2">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit();
+              if (e.key === "Escape") cancelEdit();
+            }}
+            className="w-full border border-black/15 rounded-md px-2 py-1 text-sm font-medium"
+          />
+          <div className="flex gap-2">
+            <button onClick={saveEdit} className="text-xs bg-accent text-white px-2 py-1 rounded-md font-medium">
+              Save
+            </button>
+            <button onClick={cancelEdit} className="text-xs text-ink/50 px-2 py-1">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <a href={`${hrefBase}/${project.id}`} className="font-medium text-ink hover:underline">
+              {project.name}
+            </a>
+            <div className="flex gap-1 shrink-0 -mt-1 -mr-1">
+              <button
+                onClick={() => setEditing(true)}
+                title="Rename"
+                className="text-ink/40 hover:text-ink p-1.5 rounded hover:bg-black/5"
+              >
+                <PencilIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDelete}
+                title="Delete"
+                className="text-ink/40 hover:text-red-600 p-1.5 rounded hover:bg-red-50"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <a href={`${hrefBase}/${project.id}`} className="text-sm text-accent mt-3 block">
+            Open project →
+          </a>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function LandingPage() {
+  const [wayfindingProjects, setWayfindingProjects] = useState([]);
+  const [faProjects, setFaProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     load();
@@ -36,122 +114,85 @@ export default function ProjectsPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("projects")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) setError(error.message);
-    else setProjects(data);
+    const [{ data: wf, error: wfError }, { data: fa, error: faError }] = await Promise.all([
+      supabase.from("projects").select("*").order("created_at", { ascending: false }),
+      supabase.from("fa_projects").select("*").order("created_at", { ascending: false }),
+    ]);
+    if (wfError || faError) setError((wfError || faError).message);
+    setWayfindingProjects(wf || []);
+    setFaProjects(fa || []);
     setLoading(false);
   }
 
-  function startEdit(project) {
-    setEditingId(project.id);
-    setEditingName(project.name);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditingName("");
-  }
-
-  async function saveEdit(id) {
-    if (!editingName.trim()) return;
-    await supabase.from("projects").update({ name: editingName.trim() }).eq("id", id);
-    setEditingId(null);
-    load();
-  }
-
-  async function handleDelete(project) {
-    const confirmed = window.confirm(
-      `Delete "${project.name}"? This permanently removes every plan, sign, and message inside it. This can't be undone.`
-    );
-    if (!confirmed) return;
-    await supabase.from("projects").delete().eq("id", project.id);
-    load();
-  }
-
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-1">
-        <h1 className="text-2xl font-semibold text-ink">Projects</h1>
-        <a
-          href="/projects/new"
-          className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
-        >
-          New project
-        </a>
-      </div>
-      <p className="text-ink/60 mb-6">Each project can hold several plans — floors, buildings, or phases.</p>
-
-      {loading && <p className="text-ink/50">Loading projects...</p>}
-      {error && (
-        <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-3 text-sm">{error}</p>
-      )}
-
-      {!loading && !error && projects.length === 0 && (
-        <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
-          No projects yet. Create one to get started.
+    <div className="space-y-12">
+      <div>
+        <div className="flex items-center gap-4 mb-1">
+          <h1 className="text-2xl font-semibold text-ink">Wayfinding Projects</h1>
+          <a
+            href="/projects/new"
+            className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+          >
+            New project
+          </a>
         </div>
-      )}
+        <p className="text-ink/60 mb-6">Each project can hold several plans — floors, buildings, or phases.</p>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {projects.map((project) => (
-          <div key={project.id} className="bg-white border border-black/10 rounded-lg p-4 hover:border-accent/50">
-            {editingId === project.id ? (
-              <div className="space-y-2">
-                <input
-                  autoFocus
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit(project.id);
-                    if (e.key === "Escape") cancelEdit();
-                  }}
-                  className="w-full border border-black/15 rounded-md px-2 py-1 text-sm font-medium"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => saveEdit(project.id)}
-                    className="text-xs bg-accent text-white px-2 py-1 rounded-md font-medium"
-                  >
-                    Save
-                  </button>
-                  <button onClick={cancelEdit} className="text-xs text-ink/50 px-2 py-1">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-start justify-between gap-2">
-                  <a href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
-                    {project.name}
-                  </a>
-                  <div className="flex gap-1 shrink-0 -mt-1 -mr-1">
-                    <button
-                      onClick={() => startEdit(project)}
-                      title="Rename project"
-                      className="text-ink/40 hover:text-ink p-1.5 rounded hover:bg-black/5"
-                    >
-                      <PencilIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(project)}
-                      title="Delete project"
-                      className="text-ink/40 hover:text-red-600 p-1.5 rounded hover:bg-red-50"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <a href={`/projects/${project.id}`} className="text-sm text-accent mt-3 block">
-                  Open project →
-                </a>
-              </>
-            )}
+        {loading && <p className="text-ink/50">Loading...</p>}
+        {error && <p className="text-red-700 bg-red-50 border border-red-200 rounded-md p-3 text-sm">{error}</p>}
+
+        {!loading && !error && wayfindingProjects.length === 0 && (
+          <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
+            No projects yet. Create one to get started.
           </div>
-        ))}
+        )}
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {wayfindingProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              hrefBase="/projects"
+              table="projects"
+              deleteWarning="This permanently removes every plan, sign, and message inside it."
+              onChanged={load}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-4 mb-1">
+          <h1 className="text-2xl font-semibold text-ink">FA Signage Projects</h1>
+          <a
+            href="/fa-projects/new"
+            className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+          >
+            New project
+          </a>
+        </div>
+        <p className="text-ink/60 mb-6">
+          Request and track Functional Area signage — venues, sign types, and cost per request.
+        </p>
+
+        {!loading && !error && faProjects.length === 0 && (
+          <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
+            No FA Signage projects yet. Create one to get started.
+          </div>
+        )}
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {faProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              hrefBase="/fa-projects"
+              table="fa_projects"
+              deleteWarning="This permanently removes its sign types, venues, and all requests."
+              onChanged={load}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
