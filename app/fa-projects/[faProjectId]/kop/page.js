@@ -144,28 +144,38 @@ export default function FaKopPage({ params }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink/70 mb-1">Width</label>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.width}
-                onChange={(e) => setForm({ ...form, width: e.target.value })}
-                placeholder="optional"
-                className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
-              />
+              <label className="block text-xs font-medium text-ink/70 mb-1">Width (mm)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.width}
+                  onChange={(e) => setForm({ ...form, width: e.target.value })}
+                  placeholder="optional"
+                  className="w-full border border-black/15 rounded-md pl-3 pr-9 py-1.5 text-sm"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink/40 pointer-events-none">
+                  mm
+                </span>
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink/70 mb-1">Height</label>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.height}
-                onChange={(e) => setForm({ ...form, height: e.target.value })}
-                placeholder="optional"
-                className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
-              />
+              <label className="block text-xs font-medium text-ink/70 mb-1">Height (mm)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.height}
+                  onChange={(e) => setForm({ ...form, height: e.target.value })}
+                  placeholder="optional"
+                  className="w-full border border-black/15 rounded-md pl-3 pr-9 py-1.5 text-sm"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink/40 pointer-events-none">
+                  mm
+                </span>
+              </div>
             </div>
           </div>
 
@@ -289,7 +299,7 @@ export default function FaKopPage({ params }) {
                     {" · "}
                     {st.mounting}
                     {st.sign_design ? ` · ${st.sign_design}` : ""}
-                    {(st.width || st.height) ? ` · ${st.width || "?"} × ${st.height || "?"}` : ""}
+                    {(st.width || st.height) ? ` · ${st.width || "?"} × ${st.height || "?"} mm` : ""}
                     {st.supports_pictogram ? "" : " · no pictograms"}
                     {st.unit_cost != null ? ` · $${Number(st.unit_cost).toFixed(2)}/unit` : ""}
                   </p>
