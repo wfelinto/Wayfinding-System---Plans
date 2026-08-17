@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { canAccessWayfinding, canAccessFaSignage } from "@/lib/permissions";
 
 function PencilIcon(props) {
   return (
@@ -105,6 +106,7 @@ function ProjectCard({ project, hrefBase, table, deleteWarning, onChanged }) {
 export default function LandingPage() {
   const [wayfindingProjects, setWayfindingProjects] = useState([]);
   const [faProjects, setFaProjects] = useState([]);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -114,9 +116,24 @@ export default function LandingPage() {
 
   async function load() {
     setLoading(true);
+    const { data: userData } = await supabase.auth.getUser();
+    let myRole = null;
+    if (userData?.user) {
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", userData.user.id).single();
+      myRole = profile?.role || null;
+    }
+    setRole(myRole);
+
+    const wfAllowed = canAccessWayfinding(myRole);
+    const faAllowed = canAccessFaSignage(myRole);
+
     const [{ data: wf, error: wfError }, { data: fa, error: faError }] = await Promise.all([
-      supabase.from("projects").select("*").order("created_at", { ascending: false }),
-      supabase.from("fa_projects").select("*").order("created_at", { ascending: false }),
+      wfAllowed
+        ? supabase.from("projects").select("*").order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      faAllowed
+        ? supabase.from("fa_projects").select("*").order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
     ]);
     if (wfError || faError) setError((wfError || faError).message);
     setWayfindingProjects(wf || []);
@@ -126,6 +143,7 @@ export default function LandingPage() {
 
   return (
     <div className="space-y-12">
+      {canAccessWayfinding(role) && (
       <div>
         <div className="flex items-center gap-4 mb-1">
           <h1 className="text-2xl font-semibold text-ink">Wayfinding Projects</h1>
@@ -160,7 +178,9 @@ export default function LandingPage() {
           ))}
         </div>
       </div>
+      )}
 
+      {canAccessFaSignage(role) && (
       <div>
         <div className="flex items-center gap-4 mb-1">
           <h1 className="text-2xl font-semibold text-ink">FA Signage Projects</h1>
@@ -194,6 +214,7 @@ export default function LandingPage() {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

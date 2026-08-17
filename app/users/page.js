@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { ROLE_OPTIONS, roleLabel } from "@/lib/permissions";
 
 const emptyForm = {
   email: "",
@@ -156,9 +157,16 @@ export default function UsersPage() {
               onChange={(e) => setForm({ ...form, role: e.target.value })}
               className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
             >
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
+              {ROLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+            <p className="text-xs text-ink/40 mt-1">
+              Owner: everything, including this page. Admin - FA/WF: restricted to just that area. User:
+              both project areas, no Users page.
+            </p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-ink/80">
@@ -228,7 +236,7 @@ export default function UsersPage() {
                 <div>
                   <h3 className="font-medium text-ink">{p.email}</h3>
                   <p className="text-sm text-ink/60 mt-1">
-                    {p.role === "admin" ? "Admin" : "User"}
+                    {roleLabel(p.role)}
                     {p.fa_signage_approval && (
                       <> · FA Signage approver ({p.fa_signage_approval_area || "no area set"})</>
                     )}

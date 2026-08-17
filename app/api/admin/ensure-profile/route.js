@@ -34,7 +34,7 @@ export async function POST(request) {
     .insert({
       id: user.id,
       email: user.email,
-      role: isFirstEver ? "admin" : "user",
+      role: isFirstEver ? "owner" : "user",
       fa_signage_approval: false,
       fa_signage_approval_area: null,
     })

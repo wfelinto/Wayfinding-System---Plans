@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAdminClient, getCallerUser } from "../_shared";
+import { isOwner } from "@/lib/permissions";
+
+const VALID_ROLES = ["user", "admin_fa", "admin_wf", "admin_fa_wf", "owner"];
 
 export async function POST(request) {
   let admin;
@@ -15,8 +18,8 @@ export async function POST(request) {
   }
 
   const { data: callerProfile } = await admin.from("profiles").select("role").eq("id", caller.id).single();
-  if (callerProfile?.role !== "admin") {
-    return NextResponse.json({ error: "Only admins can edit users." }, { status: 403 });
+  if (!isOwner(callerProfile?.role)) {
+    return NextResponse.json({ error: "Only owners can edit users." }, { status: 403 });
   }
 
   const body = await request.json();
@@ -35,7 +38,7 @@ export async function POST(request) {
   const { error } = await admin
     .from("profiles")
     .update({
-      role: role === "admin" ? "admin" : "user",
+      role: VALID_ROLES.includes(role) ? role : "user",
       fa_signage_approval: !!fa_signage_approval,
       fa_signage_approval_area: fa_signage_approval ? fa_signage_approval_area : null,
     })

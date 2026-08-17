@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import * as XLSX from "xlsx";
 
 const LANGUAGE_OPTIONS = [
   { value: "EN", label: "English" },
@@ -191,6 +192,68 @@ export default function FaRequestsPage({ params }) {
   function signTypeLabel(signTypeId) {
     const st = signTypes.find((st) => st.id === signTypeId);
     return st ? st.name : "—";
+  }
+
+  function handleDownloadExcel() {
+    const headers = [
+      "Request #",
+      "Order date",
+      "Requester",
+      "Venue - Functional Area",
+      "Ops start",
+      "Sign type",
+      "Message",
+      "Languages",
+      "Orientation",
+      "Priority",
+      "Qty of designs",
+      "Qty per design",
+      "Total quantity",
+      "Total price",
+      "City",
+      "Address",
+      "Delivery point",
+      "Focal point",
+      "Focal point e-mail",
+      "Focal point phone",
+      "Comments",
+      "Approval status",
+    ];
+
+    const rows = filteredRequests.map((r) => {
+      const venue = venueRow(r.venue_id);
+      const fa = functionalAreaForVenue(r.venue_id);
+      return [
+        r.request_number ?? "",
+        r.created_at ? new Date(r.created_at).toLocaleDateString() : "",
+        r.requester_name || "",
+        venue ? `${venue.acronym}${fa ? ` — ${fa.name}` : ""}` : "",
+        r.operations_start_date || "",
+        signTypeLabel(r.sign_type_id),
+        r.message || "",
+        Array.isArray(r.languages) ? r.languages.join(", ") : "",
+        r.orientation || "",
+        r.priority || "",
+        r.quantity_of_designs || "",
+        r.quantity_per_design || "",
+        r.total_quantity ?? "",
+        r.total_price ?? "",
+        venue?.city || "",
+        venue?.address || "",
+        venue?.delivery_point || "",
+        venue?.focal_point || "",
+        venue?.focal_point_email || "",
+        venue?.focal_point_phone || "",
+        r.comments || "",
+        r.approval_status || "",
+      ];
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    worksheet["!cols"] = headers.map(() => ({ wch: 18 }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Schedule");
+    XLSX.writeFile(workbook, `${project?.name || "FA Signage"} - schedule.xlsx`);
   }
 
   return (
@@ -409,9 +472,16 @@ export default function FaRequestsPage({ params }) {
         </button>
       </form>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="font-medium text-ink">Schedule</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadExcel}
+            disabled={filteredRequests.length === 0}
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5 disabled:opacity-40"
+          >
+            Download Excel
+          </button>
           <label className="text-xs text-ink/60">Filter by functional area</label>
           <select
             value={areaFilter}
