@@ -28,7 +28,6 @@ const PRIORITY_COLORS = {
 
 const emptyForm = {
   requester_name: "",
-  functional_area: "",
   venue_id: "",
   operations_start_date: "",
   sign_type_id: "",
@@ -93,7 +92,19 @@ export default function FaRequestsPage({ params }) {
   const liveTotalPrice =
     selectedSignType?.unit_cost != null ? Number(selectedSignType.unit_cost) * liveTotalQuantity : null;
 
-  const filteredRequests = areaFilter ? requests.filter((r) => r.functional_area === areaFilter) : requests;
+  function venueRow(venueId) {
+    return venues.find((v) => v.id === venueId) || null;
+  }
+
+  function functionalAreaForVenue(venueId) {
+    const venue = venueRow(venueId);
+    if (!venue) return null;
+    return functionalAreas.find((f) => f.id === venue.functional_area_id) || null;
+  }
+
+  const filteredRequests = areaFilter
+    ? requests.filter((r) => functionalAreaForVenue(r.venue_id)?.name === areaFilter)
+    : requests;
 
   function toggleLanguage(value) {
     setForm((prev) => ({
@@ -108,7 +119,6 @@ export default function FaRequestsPage({ params }) {
     setEditingId(r.id);
     setForm({
       requester_name: r.requester_name || "",
-      functional_area: r.functional_area || "",
       venue_id: r.venue_id || "",
       operations_start_date: r.operations_start_date || "",
       sign_type_id: r.sign_type_id || "",
@@ -141,7 +151,6 @@ export default function FaRequestsPage({ params }) {
 
     const payload = {
       requester_name: form.requester_name || null,
-      functional_area: form.functional_area || null,
       venue_id: form.venue_id || null,
       operations_start_date: form.operations_start_date || null,
       sign_type_id: form.sign_type_id || null,
@@ -179,10 +188,6 @@ export default function FaRequestsPage({ params }) {
     load();
   }
 
-  function venueRow(venueId) {
-    return venues.find((v) => v.id === venueId) || null;
-  }
-
   function signTypeLabel(signTypeId) {
     const st = signTypes.find((st) => st.id === signTypeId);
     return st ? st.name : "—";
@@ -217,33 +222,7 @@ export default function FaRequestsPage({ params }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink/70 mb-1">Functional area</label>
-            <select
-              value={form.functional_area}
-              onChange={(e) => setForm({ ...form, functional_area: e.target.value })}
-              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
-            >
-              <option value="">Select a functional area…</option>
-              {functionalAreas.map((f) => (
-                <option key={f.id} value={f.name}>
-                  {f.name}
-                  {f.acronym ? ` (${f.acronym})` : ""}
-                </option>
-              ))}
-            </select>
-            {functionalAreas.length === 0 && (
-              <p className="text-xs text-amber-700 mt-1">
-                No functional areas yet — add some on the{" "}
-                <a href={`/fa-projects/${faProjectId}/functional-areas`} className="underline">
-                  Functional Areas page
-                </a>
-                .
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-ink/70 mb-1">Venue</label>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Venue - Functional Area</label>
             <select
               value={form.venue_id}
               onChange={(e) => setForm({ ...form, venue_id: e.target.value })}
@@ -464,8 +443,7 @@ export default function FaRequestsPage({ params }) {
                 <th className="px-3 py-2 font-medium">Request #</th>
                 <th className="px-3 py-2 font-medium">Order date</th>
                 <th className="px-3 py-2 font-medium">Requester</th>
-                <th className="px-3 py-2 font-medium">Functional area</th>
-                <th className="px-3 py-2 font-medium">Venue</th>
+                <th className="px-3 py-2 font-medium">Venue - Functional Area</th>
                 <th className="px-3 py-2 font-medium">Ops start</th>
                 <th className="px-3 py-2 font-medium">Sign type</th>
                 <th className="px-3 py-2 font-medium">Message</th>
@@ -490,6 +468,7 @@ export default function FaRequestsPage({ params }) {
             <tbody>
               {filteredRequests.map((r) => {
                 const venue = venueRow(r.venue_id);
+                const fa = functionalAreaForVenue(r.venue_id);
                 return (
                   <tr key={r.id} className="border-t border-black/10 align-top">
                     <td className="px-3 py-3 text-ink/80 font-medium whitespace-nowrap">
@@ -499,8 +478,9 @@ export default function FaRequestsPage({ params }) {
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-3 py-3 text-ink/80 whitespace-nowrap">{r.requester_name || "—"}</td>
-                    <td className="px-3 py-3 text-ink/70">{r.functional_area || "—"}</td>
-                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.acronym || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
+                      {venue ? `${venue.acronym}${fa ? ` — ${fa.name}` : ""}` : "—"}
+                    </td>
                     <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{r.operations_start_date || "—"}</td>
                     <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{signTypeLabel(r.sign_type_id)}</td>
                     <td className="px-3 py-3 text-ink/70">{r.message || "—"}</td>
