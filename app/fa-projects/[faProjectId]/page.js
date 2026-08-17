@@ -39,7 +39,13 @@ export default function FaProjectHubPage({ params }) {
           href={`/fa-projects/${faProjectId}/venues`}
           className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
         >
-          Venues
+          FA info per Venue
+        </a>
+        <a
+          href={`/fa-projects/${faProjectId}/functional-areas`}
+          className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+        >
+          Functional Areas
         </a>
       </div>
 

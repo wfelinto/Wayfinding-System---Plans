@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 const LANGUAGE_OPTIONS = [
@@ -10,12 +10,20 @@ const LANGUAGE_OPTIONS = [
   { value: "PT", label: "Portuguese-BR" },
 ];
 
+const ORIENTATION_OPTIONS = ["Landscape", "Portrait"];
+const PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 const APPROVAL_OPTIONS = ["In Progress", "Approved", "Rejected"];
 
 const APPROVAL_COLORS = {
   "In Progress": "bg-amber-50 text-amber-700 border-amber-200",
   Approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
   Rejected: "bg-red-50 text-red-700 border-red-200",
+};
+
+const PRIORITY_COLORS = {
+  LOW: "bg-black/5 text-ink/60 border-black/10",
+  MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
+  HIGH: "bg-red-50 text-red-700 border-red-200",
 };
 
 const emptyForm = {
@@ -26,7 +34,10 @@ const emptyForm = {
   sign_type_id: "",
   message: "",
   languages: [],
-  quantity: 1,
+  orientation: "",
+  priority: "",
+  quantity_of_designs: "",
+  quantity_per_design: "",
   comments: "",
   approval_status: "In Progress",
 };
@@ -36,6 +47,7 @@ export default function FaRequestsPage({ params }) {
   const [project, setProject] = useState(null);
   const [venues, setVenues] = useState([]);
   const [signTypes, setSignTypes] = useState([]);
+  const [functionalAreas, setFunctionalAreas] = useState([]);
   const [requests, setRequests] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -50,33 +62,36 @@ export default function FaRequestsPage({ params }) {
 
   async function load() {
     setLoading(true);
-    const [{ data: projectData }, { data: venueData }, { data: signTypeData }, { data: requestData, error }] =
-      await Promise.all([
-        supabase.from("fa_projects").select("*").eq("id", faProjectId).single(),
-        supabase.from("fa_venues").select("*").eq("fa_project_id", faProjectId).order("acronym"),
-        supabase.from("fa_sign_types").select("*").eq("fa_project_id", faProjectId).order("name"),
-        supabase
-          .from("fa_requests")
-          .select("*")
-          .eq("fa_project_id", faProjectId)
-          .order("created_at", { ascending: false }),
-      ]);
+    const [
+      { data: projectData },
+      { data: venueData },
+      { data: signTypeData },
+      { data: faData },
+      { data: requestData, error },
+    ] = await Promise.all([
+      supabase.from("fa_projects").select("*").eq("id", faProjectId).single(),
+      supabase.from("fa_venues").select("*").eq("fa_project_id", faProjectId).order("acronym"),
+      supabase.from("fa_sign_types").select("*").eq("fa_project_id", faProjectId).order("name"),
+      supabase.from("fa_functional_areas").select("*").eq("fa_project_id", faProjectId).order("name"),
+      supabase
+        .from("fa_requests")
+        .select("*")
+        .eq("fa_project_id", faProjectId)
+        .order("created_at", { ascending: false }),
+    ]);
     setProject(projectData);
     setVenues(venueData || []);
     setSignTypes(signTypeData || []);
+    setFunctionalAreas(faData || []);
     if (error) setError(error.message);
     else setRequests(requestData || []);
     setLoading(false);
   }
 
   const selectedSignType = signTypes.find((st) => st.id === form.sign_type_id);
-  const liveTotalCost =
-    selectedSignType?.unit_cost != null ? Number(selectedSignType.unit_cost) * Number(form.quantity || 0) : null;
-
-  const functionalAreas = useMemo(
-    () => Array.from(new Set(requests.map((r) => (r.functional_area || "").trim()).filter(Boolean))).sort(),
-    [requests]
-  );
+  const liveTotalQuantity = (Number(form.quantity_of_designs) || 0) * (Number(form.quantity_per_design) || 0);
+  const liveTotalPrice =
+    selectedSignType?.unit_cost != null ? Number(selectedSignType.unit_cost) * liveTotalQuantity : null;
 
   const filteredRequests = areaFilter ? requests.filter((r) => r.functional_area === areaFilter) : requests;
 
@@ -99,7 +114,10 @@ export default function FaRequestsPage({ params }) {
       sign_type_id: r.sign_type_id || "",
       message: r.message || "",
       languages: Array.isArray(r.languages) ? r.languages : [],
-      quantity: r.quantity ?? 1,
+      orientation: r.orientation || "",
+      priority: r.priority || "",
+      quantity_of_designs: r.quantity_of_designs || "",
+      quantity_per_design: r.quantity_per_design || "",
       comments: r.comments || "",
       approval_status: r.approval_status || "In Progress",
     });
@@ -118,6 +136,9 @@ export default function FaRequestsPage({ params }) {
     setError(null);
     setSaving(true);
 
+    const totalQuantity = (Number(form.quantity_of_designs) || 0) * (Number(form.quantity_per_design) || 0);
+    const totalPrice = selectedSignType?.unit_cost != null ? Number(selectedSignType.unit_cost) * totalQuantity : null;
+
     const payload = {
       requester_name: form.requester_name || null,
       functional_area: form.functional_area || null,
@@ -126,8 +147,12 @@ export default function FaRequestsPage({ params }) {
       sign_type_id: form.sign_type_id || null,
       message: form.message || null,
       languages: form.languages,
-      quantity: Number(form.quantity) || 1,
-      total_cost: liveTotalCost,
+      orientation: form.orientation || null,
+      priority: form.priority || null,
+      quantity_of_designs: form.quantity_of_designs || null,
+      quantity_per_design: form.quantity_per_design || null,
+      total_quantity: totalQuantity,
+      total_price: totalPrice,
       comments: form.comments || null,
       approval_status: form.approval_status,
     };
@@ -154,9 +179,8 @@ export default function FaRequestsPage({ params }) {
     load();
   }
 
-  function venueLabel(venueId) {
-    const v = venues.find((v) => v.id === venueId);
-    return v ? v.acronym : "—";
+  function venueRow(venueId) {
+    return venues.find((v) => v.id === venueId) || null;
   }
 
   function signTypeLabel(signTypeId) {
@@ -194,12 +218,28 @@ export default function FaRequestsPage({ params }) {
 
           <div>
             <label className="block text-xs font-medium text-ink/70 mb-1">Functional area</label>
-            <input
+            <select
               value={form.functional_area}
               onChange={(e) => setForm({ ...form, functional_area: e.target.value })}
-              placeholder="e.g. Media, Broadcast, VIP"
-              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
-            />
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Select a functional area…</option>
+              {functionalAreas.map((f) => (
+                <option key={f.id} value={f.name}>
+                  {f.name}
+                  {f.acronym ? ` (${f.acronym})` : ""}
+                </option>
+              ))}
+            </select>
+            {functionalAreas.length === 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                No functional areas yet — add some on the{" "}
+                <a href={`/fa-projects/${faProjectId}/functional-areas`} className="underline">
+                  Functional Areas page
+                </a>
+                .
+              </p>
+            )}
           </div>
 
           <div>
@@ -210,12 +250,25 @@ export default function FaRequestsPage({ params }) {
               className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
             >
               <option value="">Select a venue…</option>
-              {venues.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.acronym}
-                </option>
-              ))}
+              {venues.map((v) => {
+                const fa = functionalAreas.find((f) => f.id === v.functional_area_id);
+                return (
+                  <option key={v.id} value={v.id}>
+                    {v.acronym}
+                    {fa ? ` — ${fa.name}` : ""}
+                  </option>
+                );
+              })}
             </select>
+            {venues.length === 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                No venues yet — add some on the{" "}
+                <a href={`/fa-projects/${faProjectId}/venues`} className="underline">
+                  FA info per Venue page
+                </a>
+                .
+              </p>
+            )}
           </div>
 
           <div>
@@ -254,12 +307,51 @@ export default function FaRequestsPage({ params }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink/70 mb-1">Quantity</label>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Orientation</label>
+            <select
+              value={form.orientation}
+              onChange={(e) => setForm({ ...form, orientation: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Select…</option>
+              {ORIENTATION_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Priority</label>
+            <select
+              value={form.priority}
+              onChange={(e) => setForm({ ...form, priority: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Select…</option>
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Quantity of designs</label>
             <input
-              type="number"
-              min="1"
-              value={form.quantity}
-              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              value={form.quantity_of_designs}
+              onChange={(e) => setForm({ ...form, quantity_of_designs: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Quantity per design</label>
+            <input
+              value={form.quantity_per_design}
+              onChange={(e) => setForm({ ...form, quantity_per_design: e.target.value })}
               className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
             />
           </div>
@@ -274,13 +366,13 @@ export default function FaRequestsPage({ params }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink/70 mb-1">Total cost</label>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Total quantity / price</label>
             <input
               readOnly
-              value={liveTotalCost != null ? `$${liveTotalCost.toFixed(2)}` : "—"}
+              value={`${liveTotalQuantity} ${liveTotalPrice != null ? `· $${liveTotalPrice.toFixed(2)}` : ""}`}
               className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-black/5 text-ink/70"
             />
-            <p className="text-xs text-ink/40 mt-1">Quantity × the sign type&apos;s rate.</p>
+            <p className="text-xs text-ink/40 mt-1">Designs × per-design quantity, priced at the sign type's rate.</p>
           </div>
 
           <div className="lg:col-span-2">
@@ -348,9 +440,9 @@ export default function FaRequestsPage({ params }) {
             className="border border-black/15 rounded-md px-2 py-1 text-sm bg-white"
           >
             <option value="">All</option>
-            {functionalAreas.map((area) => (
-              <option key={area} value={area}>
-                {area}
+            {functionalAreas.map((f) => (
+              <option key={f.id} value={f.name}>
+                {f.name}
               </option>
             ))}
           </select>
@@ -369,6 +461,8 @@ export default function FaRequestsPage({ params }) {
           <table className="w-full text-sm">
             <thead className="bg-black/5 text-ink/60 text-left">
               <tr>
+                <th className="px-3 py-2 font-medium">Request #</th>
+                <th className="px-3 py-2 font-medium">Order date</th>
                 <th className="px-3 py-2 font-medium">Requester</th>
                 <th className="px-3 py-2 font-medium">Functional area</th>
                 <th className="px-3 py-2 font-medium">Venue</th>
@@ -376,49 +470,90 @@ export default function FaRequestsPage({ params }) {
                 <th className="px-3 py-2 font-medium">Sign type</th>
                 <th className="px-3 py-2 font-medium">Message</th>
                 <th className="px-3 py-2 font-medium">Languages</th>
-                <th className="px-3 py-2 font-medium">Qty</th>
-                <th className="px-3 py-2 font-medium">Total cost</th>
+                <th className="px-3 py-2 font-medium">Orientation</th>
+                <th className="px-3 py-2 font-medium">Priority</th>
+                <th className="px-3 py-2 font-medium">Qty of designs</th>
+                <th className="px-3 py-2 font-medium">Qty per design</th>
+                <th className="px-3 py-2 font-medium">Total quantity</th>
+                <th className="px-3 py-2 font-medium">Total price</th>
+                <th className="px-3 py-2 font-medium">City</th>
+                <th className="px-3 py-2 font-medium">Address</th>
+                <th className="px-3 py-2 font-medium">Delivery point</th>
+                <th className="px-3 py-2 font-medium">Focal point</th>
+                <th className="px-3 py-2 font-medium">Focal point e-mail</th>
+                <th className="px-3 py-2 font-medium">Focal point phone</th>
                 <th className="px-3 py-2 font-medium">Comments</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {filteredRequests.map((r) => (
-                <tr key={r.id} className="border-t border-black/10 align-top">
-                  <td className="px-3 py-3 text-ink/80 whitespace-nowrap">{r.requester_name || "—"}</td>
-                  <td className="px-3 py-3 text-ink/70">{r.functional_area || "—"}</td>
-                  <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venueLabel(r.venue_id)}</td>
-                  <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{r.operations_start_date || "—"}</td>
-                  <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{signTypeLabel(r.sign_type_id)}</td>
-                  <td className="px-3 py-3 text-ink/70">{r.message || "—"}</td>
-                  <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
-                    {Array.isArray(r.languages) && r.languages.length ? r.languages.join(", ") : "—"}
-                  </td>
-                  <td className="px-3 py-3 text-ink/70">{r.quantity}</td>
-                  <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
-                    {r.total_cost != null ? `$${Number(r.total_cost).toFixed(2)}` : "—"}
-                  </td>
-                  <td className="px-3 py-3 text-ink/70">{r.comments || "—"}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-block border rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
-                        APPROVAL_COLORS[r.approval_status] || APPROVAL_COLORS["In Progress"]
-                      }`}
-                    >
-                      {r.approval_status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <button onClick={() => startEdit(r)} className="text-accent hover:underline text-xs mr-2">
-                      Edit
-                    </button>
-                    <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredRequests.map((r) => {
+                const venue = venueRow(r.venue_id);
+                return (
+                  <tr key={r.id} className="border-t border-black/10 align-top">
+                    <td className="px-3 py-3 text-ink/80 font-medium whitespace-nowrap">
+                      #{r.request_number ?? "—"}
+                    </td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80 whitespace-nowrap">{r.requester_name || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{r.functional_area || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.acronym || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{r.operations_start_date || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{signTypeLabel(r.sign_type_id)}</td>
+                    <td className="px-3 py-3 text-ink/70">{r.message || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
+                      {Array.isArray(r.languages) && r.languages.length ? r.languages.join(", ") : "—"}
+                    </td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{r.orientation || "—"}</td>
+                    <td className="px-3 py-3">
+                      {r.priority ? (
+                        <span
+                          className={`inline-block border rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+                            PRIORITY_COLORS[r.priority] || PRIORITY_COLORS.LOW
+                          }`}
+                        >
+                          {r.priority}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-ink/70">{r.quantity_of_designs || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{r.quantity_per_design || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{r.total_quantity ?? "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">
+                      {r.total_price != null ? `$${Number(r.total_price).toFixed(2)}` : "—"}
+                    </td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.city || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{venue?.address || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{venue?.delivery_point || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.focal_point || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.focal_point_email || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70 whitespace-nowrap">{venue?.focal_point_phone || "—"}</td>
+                    <td className="px-3 py-3 text-ink/70">{r.comments || "—"}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-block border rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
+                          APPROVAL_COLORS[r.approval_status] || APPROVAL_COLORS["In Progress"]
+                        }`}
+                      >
+                        {r.approval_status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <button onClick={() => startEdit(r)} className="text-accent hover:underline text-xs mr-2">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

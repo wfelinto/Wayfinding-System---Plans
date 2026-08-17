@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 const emptyForm = {
   name: "",
   acronym: "",
+  functional_area_id: "",
   city: "",
   address: "",
   delivery_point: "",
@@ -14,10 +15,11 @@ const emptyForm = {
   focal_point_phone: "",
 };
 
-export default function FaVenuesPage({ params }) {
+export default function FaInfoPerVenuePage({ params }) {
   const { faProjectId } = params;
   const [project, setProject] = useState(null);
   const [venues, setVenues] = useState([]);
+  const [functionalAreas, setFunctionalAreas] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,14 +32,22 @@ export default function FaVenuesPage({ params }) {
 
   async function load() {
     setLoading(true);
-    const [{ data: projectData }, { data, error }] = await Promise.all([
+    const [{ data: projectData }, { data: venueData, error }, { data: faData }] = await Promise.all([
       supabase.from("fa_projects").select("*").eq("id", faProjectId).single(),
       supabase.from("fa_venues").select("*").eq("fa_project_id", faProjectId).order("name"),
+      supabase.from("fa_functional_areas").select("*").eq("fa_project_id", faProjectId).order("name"),
     ]);
     setProject(projectData);
     if (error) setError(error.message);
-    else setVenues(data);
+    else setVenues(venueData);
+    setFunctionalAreas(faData || []);
     setLoading(false);
+  }
+
+  function faLabel(id, field) {
+    const fa = functionalAreas.find((f) => f.id === id);
+    if (!fa) return "—";
+    return field === "acronym" ? fa.acronym || "—" : fa.name;
   }
 
   function startEdit(v) {
@@ -45,6 +55,7 @@ export default function FaVenuesPage({ params }) {
     setForm({
       name: v.name || "",
       acronym: v.acronym || "",
+      functional_area_id: v.functional_area_id || "",
       city: v.city || "",
       address: v.address || "",
       delivery_point: v.delivery_point || "",
@@ -71,9 +82,11 @@ export default function FaVenuesPage({ params }) {
     setError(null);
     setSaving(true);
 
+    const payload = { ...form, functional_area_id: form.functional_area_id || null };
+
     const { error } = editingId
-      ? await supabase.from("fa_venues").update(form).eq("id", editingId)
-      : await supabase.from("fa_venues").insert({ ...form, fa_project_id: faProjectId });
+      ? await supabase.from("fa_venues").update(payload).eq("id", editingId)
+      : await supabase.from("fa_venues").insert({ ...payload, fa_project_id: faProjectId });
 
     setSaving(false);
     if (error) {
@@ -87,7 +100,7 @@ export default function FaVenuesPage({ params }) {
 
   async function handleDelete(id) {
     const confirmed = window.confirm(
-      "Delete this venue? Any requests referencing it will keep their record but it will no longer appear in the dropdown."
+      "Delete this entry? Any requests referencing it will keep their record but it will no longer appear in the dropdown."
     );
     if (!confirmed) return;
     if (editingId === id) cancelEdit();
@@ -100,15 +113,16 @@ export default function FaVenuesPage({ params }) {
       <a href={`/fa-projects/${faProjectId}`} className="text-sm text-accent hover:underline">
         ← Back to {project?.name || "project"}
       </a>
-      <h1 className="text-2xl font-semibold text-ink mt-2 mb-1">Venues</h1>
+      <h1 className="text-2xl font-semibold text-ink mt-2 mb-1">FA info per Venue</h1>
       <p className="text-ink/60 mb-6">
-        Feeds the Venue dropdown on sign requests (shown by acronym).
+        Feeds the Venue dropdown on sign requests. Delivery and focal point details in the schedule are
+        looked up from here, per Venue and Functional Area combination.
       </p>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <form onSubmit={handleSubmit} className="bg-white border border-black/10 rounded-lg p-5 space-y-3 h-fit">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="font-medium text-ink">{editingId ? "Edit venue" : "Add a venue"}</h2>
+            <h2 className="font-medium text-ink">{editingId ? "Edit entry" : "Add FA data per venue"}</h2>
             {editingId && (
               <button type="button" onClick={cancelEdit} className="text-xs text-ink/50 hover:text-ink">
                 Cancel
@@ -134,6 +148,47 @@ export default function FaVenuesPage({ params }) {
               placeholder="e.g. AZT"
               className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Functional area</label>
+            <select
+              value={form.functional_area_id}
+              onChange={(e) => setForm({ ...form, functional_area_id: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Select a functional area…</option>
+              {functionalAreas.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink/70 mb-1">Functional area official acronym</label>
+            <select
+              value={form.functional_area_id}
+              onChange={(e) => setForm({ ...form, functional_area_id: e.target.value })}
+              className="w-full border border-black/15 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              <option value="">Select a functional area…</option>
+              {functionalAreas.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.acronym || f.name}
+                </option>
+              ))}
+            </select>
+            {functionalAreas.length === 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                No functional areas yet — add some on the{" "}
+                <a href={`/fa-projects/${faProjectId}/functional-areas`} className="underline">
+                  Functional Areas page
+                </a>
+                .
+              </p>
+            )}
           </div>
 
           <div>
@@ -200,7 +255,7 @@ export default function FaVenuesPage({ params }) {
             disabled={saving}
             className="w-full bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? "Saving..." : editingId ? "Save changes" : "Add venue"}
+            {saving ? "Saving..." : editingId ? "Save changes" : "Add entry"}
           </button>
         </form>
 
@@ -208,7 +263,7 @@ export default function FaVenuesPage({ params }) {
           {loading && <p className="text-ink/50">Loading...</p>}
           {!loading && venues.length === 0 && (
             <div className="border border-dashed border-black/15 rounded-lg p-10 text-center text-ink/50">
-              No venues yet. Add your first one from the form.
+              No entries yet. Add your first one from the form.
             </div>
           )}
 
@@ -223,10 +278,11 @@ export default function FaVenuesPage({ params }) {
                 <div>
                   <h3 className="font-medium text-ink">
                     {v.name} <span className="text-ink/50 font-normal">({v.acronym})</span>
+                    {v.functional_area_id && (
+                      <span className="text-accent font-normal"> · {faLabel(v.functional_area_id, "name")}</span>
+                    )}
                   </h3>
-                  <p className="text-sm text-ink/60 mt-1">
-                    {[v.city, v.address].filter(Boolean).join(" · ")}
-                  </p>
+                  <p className="text-sm text-ink/60 mt-1">{[v.city, v.address].filter(Boolean).join(" · ")}</p>
                   {(v.focal_point || v.focal_point_email || v.focal_point_phone) && (
                     <p className="text-sm text-ink/50 mt-1">
                       {[v.focal_point, v.focal_point_email, v.focal_point_phone].filter(Boolean).join(" · ")}

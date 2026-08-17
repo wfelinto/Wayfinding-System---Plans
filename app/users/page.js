@@ -26,20 +26,17 @@ export default function UsersPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data: profileData, error: profileError }, { data: requestData }] = await Promise.all([
+    const [{ data: profileData, error: profileError }, { data: faData }] = await Promise.all([
       supabase.from("profiles").select("*").order("email"),
-      supabase.from("fa_requests").select("functional_area"),
+      supabase.from("fa_functional_areas").select("name"),
     ]);
     if (profileError) setError(profileError.message);
     else setProfiles(profileData || []);
 
-    const areas = Array.from(
-      new Set((requestData || []).map((r) => (r.functional_area || "").trim()).filter(Boolean))
-    ).sort();
+    const areas = Array.from(new Set((faData || []).map((f) => (f.name || "").trim()).filter(Boolean))).sort();
     setFunctionalAreas(areas);
     setLoading(false);
   }
-
   async function authedFetch(url, body) {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -195,7 +192,7 @@ export default function UsersPage() {
               </select>
               {functionalAreas.length === 0 && (
                 <p className="text-xs text-amber-700 mt-1">
-                  No functional areas yet — add some FA Signage requests first.
+                  No functional areas yet — add some on a project's Functional Areas page first.
                 </p>
               )}
             </div>
