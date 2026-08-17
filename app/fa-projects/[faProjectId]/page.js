@@ -27,22 +27,20 @@ export default function FaProjectHubPage({ params }) {
   return (
     <div>
       <a href="/" className="text-sm text-accent hover:underline">← All projects</a>
-      <div className="flex items-center justify-between mt-2 mb-6 flex-wrap gap-3">
+      <div className="flex items-center gap-3 mt-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-semibold text-ink">{loading ? "Loading..." : project?.name}</h1>
-        <div className="flex items-center gap-2">
-          <a
-            href={`/fa-projects/${faProjectId}/kop`}
-            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
-          >
-            FA Sign Types (KoP)
-          </a>
-          <a
-            href={`/fa-projects/${faProjectId}/venues`}
-            className="px-4 py-2 rounded-md text-sm font-medium border border-black/15 text-ink/70 hover:bg-black/5"
-          >
-            Venues
-          </a>
-        </div>
+        <a
+          href={`/fa-projects/${faProjectId}/kop`}
+          className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+        >
+          FA Sign Types (KoP)
+        </a>
+        <a
+          href={`/fa-projects/${faProjectId}/venues`}
+          className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+        >
+          Venues
+        </a>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
